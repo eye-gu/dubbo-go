@@ -1,6 +1,6 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
@@ -18,6 +18,7 @@
 package impl
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -28,131 +29,50 @@ import (
 
 import (
 	"dubbo.apache.org/dubbo-go/v3/common/constant"
+	"dubbo.apache.org/dubbo-go/v3/common/serialize"
 )
 
-// TestGetSerializerById tests GetSerializerById with valid and invalid serializer IDs
-func TestGetSerializerById(t *testing.T) {
-	// Setup: Create a mock serializer for testing
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
-	tests := []struct {
-		desc        string
-		id          byte
-		shouldPanic bool
-	}{
-		{
-			desc:        "valid Hessian2 serializer ID",
-			id:          constant.SHessian2,
-			shouldPanic: false,
-		},
-		{
-			desc:        "valid Protobuf serializer ID",
-			id:          constant.SProto,
-			shouldPanic: true, // Will panic because serializer is not registered
-		},
-		{
-			desc:        "invalid serializer ID 255",
-			id:          255,
-			shouldPanic: true, // Will panic because ID is not in nameMaps
-		},
-		{
-			desc:        "default Hessian2 serializer ID 0",
-			id:          0,
-			shouldPanic: true, // Will panic because ID 0 is not registered in nameMaps
-		},
+// hessian2Serialization resolves the built-in hessian2 serialization as a
+// DubboSerialization; a convenience for tests exercising the dubbo envelope.
+func hessian2Serialization() (serialize.DubboSerialization, error) {
+	s, err := serialize.GetSerialization(constant.Hessian2Serialization)
+	if err != nil {
+		return nil, err
 	}
-
-	for _, test := range tests {
-		t.Run(test.desc, func(t *testing.T) {
-			if test.shouldPanic {
-				assert.Panics(t, func() {
-					GetSerializerById(test.id)
-				})
-			} else {
-				assert.NotPanics(t, func() {
-					serializer, err := GetSerializerById(test.id)
-					require.NoError(t, err)
-					assert.NotNil(t, serializer)
-					assert.Equal(t, mockSerializer, serializer)
-				})
-			}
-		})
+	ss, ok := s.(serialize.DubboSerialization)
+	if !ok {
+		return nil, fmt.Errorf("serialization %s does not support dubbo protocol", constant.Hessian2Serialization)
 	}
+	return ss, nil
 }
 
-// TestGetSerializerByIdConsistency tests that GetSerializerById returns consistent results
-func TestGetSerializerByIdConsistency(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
-	// Call multiple times, should get same result
-	result1, err1 := GetSerializerById(constant.SHessian2)
-	result2, err2 := GetSerializerById(constant.SHessian2)
-	result3, err3 := GetSerializerById(constant.SHessian2)
-
-	assert.NoError(t, err1)
-	assert.NoError(t, err2)
-	assert.NoError(t, err3)
-	assert.Equal(t, result1, result2)
-	assert.Equal(t, result2, result3)
+// marshalHessianBody / unmarshalHessianBody encode/decode the hessian
+// envelope body with the built-in hessian2 serialization; test convenience
+// over encodeBody/decodeBody.
+func marshalHessianBody(p DubboPackage) ([]byte, error) {
+	ss, err := hessian2Serialization()
+	if err != nil {
+		return nil, err
+	}
+	return encodeBody(p, ss)
 }
 
-// TestSetSerializer tests SetSerializer can register a serializer
-func TestSetSerializer(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-
-	// SetSerializer should not panic
-	assert.NotPanics(t, func() {
-		SetSerializer(constant.Hessian2Serialization, mockSerializer)
-	})
-
-	// After setting, GetSerializerById should return the same serializer
-	result, err := GetSerializerById(constant.SHessian2)
-	require.NoError(t, err)
-	assert.Equal(t, mockSerializer, result)
+func unmarshalHessianBody(body []byte, p *DubboPackage) error {
+	if p.IsHeartBeat() {
+		return nil
+	}
+	ss, err := hessian2Serialization()
+	if err != nil {
+		return err
+	}
+	return decodeBody(body, p, ss)
 }
 
-// TestSetSerializerReplaces tests that SetSerializer can replace an existing serializer
-func TestSetSerializerReplaces(t *testing.T) {
-	mockSerializer1 := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer1)
-
-	result1, _ := GetSerializerById(constant.SHessian2)
-	assert.Equal(t, mockSerializer1, result1)
-
-	// Replace with a new serializer
-	mockSerializer2 := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer2)
-
-	result2, _ := GetSerializerById(constant.SHessian2)
-	assert.Equal(t, mockSerializer2, result2)
-}
-
-// TestSetSerializerWithMultipleNames tests SetSerializer with different serialization names
-func TestSetSerializerWithMultipleNames(t *testing.T) {
-	hessianSerializer := &HessianSerializer{}
-
-	// Register the same serializer with multiple names
-	SetSerializer(constant.Hessian2Serialization, hessianSerializer)
-
-	// Verify it's registered
-	result, err := GetSerializerById(constant.SHessian2)
-	require.NoError(t, err)
-	assert.Equal(t, hessianSerializer, result)
-}
-
-// TestSetSerializerNotNil tests SetSerializer with non-nil serializer
-func TestSetSerializerNotNil(t *testing.T) {
-	serializer := &HessianSerializer{}
-
-	// SetSerializer should accept non-nil serializer
-	assert.NotPanics(t, func() {
-		SetSerializer(constant.Hessian2Serialization, serializer)
-	})
-
-	// Verify the serializer is set correctly
-	result, err := GetSerializerById(constant.SHessian2)
-	require.NoError(t, err)
-	assert.NotNil(t, result)
+// TestLoadSerializerResolvesFromRegistry verifies LoadSerializer resolves
+// from the serialization registry by header id, defaulting 0 to hessian2.
+func TestLoadSerializerResolvesFromRegistry(t *testing.T) {
+	pkg := NewDubboPackage(nil)
+	require.NoError(t, LoadSerializer(pkg))
+	require.NotNil(t, pkg.Codec.serialization)
+	assert.Equal(t, constant.SHessian2, pkg.Codec.serialization.ContentTypeID())
 }

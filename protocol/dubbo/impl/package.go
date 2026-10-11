@@ -25,6 +25,10 @@ import (
 	"time"
 )
 
+import (
+	"dubbo.apache.org/dubbo-go/v3/common/serialize"
+)
+
 type PackageType int
 
 // enum part
@@ -147,8 +151,8 @@ func (p *DubboPackage) SetResponseStatus(status byte) {
 	p.Header.ResponseStatus = status
 }
 
-func (p *DubboPackage) SetSerializer(serializer Serializer) {
-	p.Codec.SetSerializer(serializer)
+func (p *DubboPackage) SetSerialization(ss serialize.DubboSerialization) {
+	p.Codec.SetSerialization(ss)
 }
 
 func NewDubboPackage(data *bytes.Buffer) *DubboPackage {

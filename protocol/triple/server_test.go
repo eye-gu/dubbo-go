@@ -725,7 +725,8 @@ func TestResolveHandlerOptionsRejectsUnsupportedSerialization(t *testing.T) {
 	)
 
 	_, err := resolveHandlerOptions(url)
-	require.ErrorContains(t, err, "unsupported serialization: yaml")
+	require.ErrorContains(t, err, "yaml")
+	require.ErrorContains(t, err, "not found, registered:")
 }
 
 func TestServerRefreshServiceRejectsInvalidHandlerTripleConfig(t *testing.T) {

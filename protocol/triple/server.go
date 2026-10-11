@@ -43,6 +43,7 @@ import (
 import (
 	"dubbo.apache.org/dubbo-go/v3/common"
 	"dubbo.apache.org/dubbo-go/v3/common/constant"
+	"dubbo.apache.org/dubbo-go/v3/common/serialize"
 	"dubbo.apache.org/dubbo-go/v3/global"
 	"dubbo.apache.org/dubbo-go/v3/internal"
 	"dubbo.apache.org/dubbo-go/v3/protocol/base"
@@ -368,12 +369,13 @@ func resolveHandlerOptions(url *common.URL) ([]tri.HandlerOption, error) {
 
 	serialization := url.GetParam(constant.SerializationKey, constant.ProtobufSerialization)
 	switch serialization {
-	case constant.ProtobufSerialization:
-	case constant.JSONSerialization:
-	case constant.Hessian2Serialization:
-	case constant.MsgpackSerialization:
+	case constant.ProtobufSerialization, constant.JSONSerialization:
+		// IDL serializations, not object serializations
 	default:
-		return nil, fmt.Errorf("unsupported serialization: %s", serialization)
+		// any serialization registered via serialize.SetSerialization
+		if _, err := serialize.GetSerialization(serialization); err != nil {
+			return nil, err
+		}
 	}
 
 	tripleConf, err := resolveTripleConfig(url)

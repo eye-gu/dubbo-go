@@ -29,8 +29,6 @@ import (
 import (
 	hessian "github.com/apache/dubbo-go-hessian2"
 
-	msgpack "github.com/ugorji/go/codec"
-
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"google.golang.org/protobuf/proto"
@@ -39,6 +37,7 @@ import (
 )
 
 import (
+	"dubbo.apache.org/dubbo-go/v3/common/serialize"
 	"dubbo.apache.org/dubbo-go/v3/protocol/triple/triple_protocol/internal/interoperability"
 )
 
@@ -237,7 +236,8 @@ func getWireCodecName(codec Codec) string {
 	return codec.Name()
 }
 
-// protoWrapperCodec wraps an inner codec (e.g., hessian2) in protobuf wrapper format.
+// protoWrapperCodec wraps a serialize.Serialization (e.g., hessian2) in
+// protobuf wrapper format.
 // This is used for interoperability with Java Dubbo Triple protocol in non-IDL mode.
 //
 // Wire format:
@@ -247,7 +247,7 @@ func getWireCodecName(codec Codec) string {
 // The Content-Type is "application/proto" because the outer format is protobuf.
 // The inner serialization type (e.g., "hessian2") is stored in the wrapper's serializeType field.
 type protoWrapperCodec struct {
-	innerCodec Codec
+	innerCodec serialize.Serialization
 }
 
 var _ WrapperCodec = (*protoWrapperCodec)(nil)
@@ -374,46 +374,10 @@ func newProtoWrapperCodec(innerCodec Codec) *protoWrapperCodec {
 	return &protoWrapperCodec{innerCodec: innerCodec}
 }
 
-// todo(DMwangnima): add unit tests
-type hessian2Codec struct{}
-
-func (h *hessian2Codec) Name() string {
-	return codecNameHessian2
-}
-
-func (c *hessian2Codec) Marshal(message any) ([]byte, error) {
-	encoder := hessian.NewEncoder()
-	if err := encoder.Encode(message); err != nil {
-		return nil, err
-	}
-
-	return encoder.Buffer(), nil
-}
-
-func (c *hessian2Codec) Unmarshal(binary []byte, message any) error {
-	decoder := hessian.NewDecoder(binary)
-	val, err := decoder.Decode()
-	if err != nil {
-		return err
-	}
-	return reflectResponse(val, message)
-}
-
-type msgpackCodec struct{}
-
-func (c *msgpackCodec) Name() string {
-	return codecNameMsgPack
-}
-
-func (c *msgpackCodec) Marshal(message any) ([]byte, error) {
-	var out []byte
-	encoder := msgpack.NewEncoderBytes(&out, new(msgpack.MsgpackHandle))
-	return out, encoder.Encode(message)
-}
-
-func (c *msgpackCodec) Unmarshal(binary []byte, message any) error {
-	decoder := msgpack.NewDecoderBytes(binary, new(msgpack.MsgpackHandle))
-	return decoder.Decode(message)
+// NewSerializationCodec wraps a serialize.Serialization in the triple
+// non-IDL wrapper codec, for use with WithCodec.
+func NewSerializationCodec(s serialize.Serialization) Codec {
+	return newProtoWrapperCodec(s)
 }
 
 // readOnlyCodecs is a read-only interface to a map of named codecs.
@@ -558,67 +522,6 @@ func getArgType(v any) string {
 	}
 }
 
-func reflectResponse(in any, out any) error {
-	if in == nil {
-		return fmt.Errorf("@in is nil")
-	}
-
-	if out == nil {
-		return fmt.Errorf("@out is nil")
-	}
-	if reflect.TypeOf(out).Kind() != reflect.Pointer {
-		return fmt.Errorf("@out should be a pointer")
-	}
-
-	inValue := hessian.EnsurePackValue(in)
-	outValue := hessian.EnsurePackValue(out)
-
-	outType := outValue.Type().String()
-	if outType == "interface {}" || outType == "*interface {}" {
-		hessian.SetValue(outValue, inValue)
-		return nil
-	}
-
-	switch inValue.Type().Kind() {
-	case reflect.Slice, reflect.Array:
-		return copySlice(inValue, outValue)
-	case reflect.Map:
-		return copyMap(inValue, outValue)
-	default:
-		hessian.SetValue(outValue, inValue)
-	}
-
-	return nil
-}
-
-// copySlice copy from inSlice to outSlice
-func copySlice(inSlice, outSlice reflect.Value) error {
-	if inSlice.IsNil() {
-		return errors.New("@in is nil")
-	}
-	if inSlice.Kind() != reflect.Slice {
-		return fmt.Errorf("@in is not slice, but %v", inSlice.Kind())
-	}
-
-	for outSlice.Kind() == reflect.Pointer {
-		outSlice = outSlice.Elem()
-	}
-
-	size := inSlice.Len()
-	outSlice.Set(reflect.MakeSlice(outSlice.Type(), size, size))
-
-	for i := range size {
-		inSliceValue := inSlice.Index(i)
-		if !inSliceValue.Type().AssignableTo(outSlice.Index(i).Type()) {
-			return fmt.Errorf("in element type [%s] can not assign to out element type [%s]",
-				inSliceValue.Type().String(), outSlice.Type().String())
-		}
-		outSlice.Index(i).Set(inSliceValue)
-	}
-
-	return nil
-}
-
 // tripleServerCodecSession is a per-request Codec for the triple server that
 // handles both IDL and Non-IDL formats.
 //
@@ -755,7 +658,7 @@ func (s *tripleServerCodecSession) responseWrapper(message any) (*interoperabili
 // unmarshalWrapperRequestArgs decodes the inner args of a TripleRequestWrapper
 // into message. message may be []any (multi-arg generic call) or a single
 // value (single-arg call packed as a one-element wrapper).
-func unmarshalWrapperRequestArgs(w *interoperability.TripleRequestWrapper, inner Codec, message any) error {
+func unmarshalWrapperRequestArgs(w *interoperability.TripleRequestWrapper, inner serialize.Serialization, message any) error {
 	if params, isSlice := message.([]any); isSlice {
 		if len(w.Args) != len(params) {
 			return fmt.Errorf("triple wrapper request: expected %d params, got %d args", len(params), len(w.Args))
@@ -772,41 +675,4 @@ func unmarshalWrapperRequestArgs(w *interoperability.TripleRequestWrapper, inner
 		return fmt.Errorf("triple wrapper request: expected 1 arg for single param, got %d", len(w.Args))
 	}
 	return inner.Unmarshal(w.Args[0], message)
-}
-
-// copyMap copy from in map to out map
-func copyMap(inMapValue, outMapValue reflect.Value) error {
-	if inMapValue.IsNil() {
-		return errors.New("@in is nil")
-	}
-	if !inMapValue.CanInterface() {
-		return errors.New("@in's Interface can not be used")
-	}
-	if inMapValue.Kind() != reflect.Map {
-		return fmt.Errorf("@in is not map, but %v", inMapValue.Kind())
-	}
-
-	outMapType := hessian.UnpackPtrType(outMapValue.Type())
-	hessian.SetValue(outMapValue, reflect.MakeMap(outMapType))
-
-	outKeyType := outMapType.Key()
-
-	outMapValue = hessian.UnpackPtrValue(outMapValue)
-	outValueType := outMapValue.Type().Elem()
-
-	for _, inKey := range inMapValue.MapKeys() {
-		inValue := inMapValue.MapIndex(inKey)
-
-		if !inKey.Type().AssignableTo(outKeyType) {
-			return fmt.Errorf("in Key:{type:%s, value:%#v} can not assign to out Key:{type:%s} ",
-				inKey.Type().String(), inKey, outKeyType.String())
-		}
-		if !inValue.Type().AssignableTo(outValueType) {
-			return fmt.Errorf("in Value:{type:%s, value:%#v} can not assign to out value:{type:%s}",
-				inValue.Type().String(), inValue, outValueType.String())
-		}
-		outMapValue.SetMapIndex(inKey, inValue)
-	}
-
-	return nil
 }

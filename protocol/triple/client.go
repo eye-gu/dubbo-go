@@ -44,6 +44,7 @@ import (
 import (
 	"dubbo.apache.org/dubbo-go/v3/common"
 	"dubbo.apache.org/dubbo-go/v3/common/constant"
+	"dubbo.apache.org/dubbo-go/v3/common/serialize"
 	"dubbo.apache.org/dubbo-go/v3/global"
 	"dubbo.apache.org/dubbo-go/v3/protocol/triple/internal/http3config"
 	tri "dubbo.apache.org/dubbo-go/v3/protocol/triple/triple_protocol"
@@ -121,12 +122,13 @@ func newClientManager(url *common.URL) (*clientManager, error) {
 	case constant.JSONSerialization:
 		isIDL = true
 		cliOpts = append(cliOpts, tri.WithProtoJSON())
-	case constant.Hessian2Serialization:
-		cliOpts = append(cliOpts, tri.WithHessian2())
-	case constant.MsgpackSerialization:
-		cliOpts = append(cliOpts, tri.WithMsgPack())
 	default:
-		panic(fmt.Sprintf("Unsupported serialization: %s", serialization))
+		// any serialization registered via serialize.SetSerialization
+		s, err := serialize.GetSerialization(serialization)
+		if err != nil {
+			return nil, err
+		}
+		cliOpts = append(cliOpts, tri.WithCodec(tri.NewSerializationCodec(s)))
 	}
 
 	// Apply the call timeout configured on the reference URL.

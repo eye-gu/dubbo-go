@@ -35,6 +35,7 @@ import (
 
 import (
 	"dubbo.apache.org/dubbo-go/v3/common/constant"
+	"dubbo.apache.org/dubbo-go/v3/common/serialize"
 	"dubbo.apache.org/dubbo-go/v3/protocol/base"
 	"dubbo.apache.org/dubbo-go/v3/protocol/dubbo/impl"
 	invct "dubbo.apache.org/dubbo-go/v3/protocol/invocation"
@@ -82,11 +83,12 @@ func (c *DubboCodec) EncodeRequest(request *remoting.Request) (*bytes.Buffer, er
 
 	header := impl.DubboHeader{}
 	serialization := invocation.GetAttachmentWithDefaultValue(constant.SerializationKey, constant.Hessian2Serialization)
-	if serialization == constant.ProtobufSerialization {
-		header.SerialID = constant.SProto
-	} else {
-		header.SerialID = constant.SHessian2
+	dubboSerialization, err := dubboSerializationByName(serialization)
+	if err != nil {
+		// it will be wrapped in readwrite.Write .
+		return nil, perrors.WithStack(err)
 	}
+	header.SerialID = dubboSerialization.ContentTypeID()
 	header.ID = request.ID
 	if request.TwoWay {
 		header.Type = impl.PackageRequest_TwoWay
@@ -100,10 +102,6 @@ func (c *DubboCodec) EncodeRequest(request *remoting.Request) (*bytes.Buffer, er
 		Body:    impl.NewRequestPayload(invocation.Arguments(), invocation.Attachments()),
 		Err:     nil,
 		Codec:   impl.NewDubboCodec(nil),
-	}
-
-	if err := impl.LoadSerializer(pkg); err != nil {
-		return nil, perrors.WithStack(err)
 	}
 
 	return pkg.Marshal()
@@ -125,10 +123,21 @@ func (c *DubboCodec) encodeHeartbeatRequest(request *remoting.Request) (*bytes.B
 		Codec:   impl.NewDubboCodec(nil),
 	}
 
-	if err := impl.LoadSerializer(pkg); err != nil {
+	return pkg.Marshal()
+}
+
+// dubboSerializationByName resolves a registered serialization by name and
+// asserts dubbo wire protocol support.
+func dubboSerializationByName(name string) (serialize.DubboSerialization, error) {
+	s, err := serialize.GetSerialization(name)
+	if err != nil {
 		return nil, err
 	}
-	return pkg.Marshal()
+	ss, ok := s.(serialize.DubboSerialization)
+	if !ok {
+		return nil, fmt.Errorf("serialization %s does not support dubbo protocol", name)
+	}
+	return ss, nil
 }
 
 // EncodeResponse encodes response

@@ -25,6 +25,11 @@ import (
 	"time"
 )
 
+import (
+	"dubbo.apache.org/dubbo-go/v3/common/serialize/hessian2"
+	"dubbo.apache.org/dubbo-go/v3/common/serialize/msgpack"
+)
+
 // A ClientOption configures a [Client].
 //
 // In addition to any options grouped in the documentation below, remember that
@@ -128,11 +133,11 @@ func WithProtoJSON() ClientOption {
 
 // todo(DMwangnima): add comment
 func WithHessian2() ClientOption {
-	return WithCodec(newProtoWrapperCodec(&hessian2Codec{}))
+	return WithCodec(newProtoWrapperCodec(hessian2.Serialization{}))
 }
 
 func WithMsgPack() ClientOption {
-	return WithCodec(newProtoWrapperCodec(&msgpackCodec{}))
+	return WithCodec(newProtoWrapperCodec(msgpack.Serialization{}))
 }
 
 // WithSendCompression configures the client to use the specified algorithm to
@@ -642,9 +647,9 @@ func withProtoJSONCodecs() HandlerOption {
 }
 
 func withHessian2Codec() Option {
-	return WithCodec(newProtoWrapperCodec(&hessian2Codec{}))
+	return WithCodec(newProtoWrapperCodec(hessian2.Serialization{}))
 }
 
 func withMsgPackCodec() Option {
-	return WithCodec(newProtoWrapperCodec(&msgpackCodec{}))
+	return WithCodec(newProtoWrapperCodec(msgpack.Serialization{}))
 }

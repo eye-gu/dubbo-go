@@ -1,6 +1,6 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
@@ -18,37 +18,31 @@
 package impl
 
 import (
-	"fmt"
-)
-
-import (
 	"dubbo.apache.org/dubbo-go/v3/common/constant"
+	"dubbo.apache.org/dubbo-go/v3/common/serialize"
 )
 
-var (
-	serializers = make(map[string]Serializer)
-	nameMaps    = make(map[byte]string)
+// registers the built-in serializations whenever this package is used
+import (
+	_ "dubbo.apache.org/dubbo-go/v3/common/serialize/hessian2"
+	_ "dubbo.apache.org/dubbo-go/v3/common/serialize/msgpack"
 )
 
-func init() {
-	nameMaps = map[byte]string{
-		constant.SHessian2: constant.Hessian2Serialization,
-		constant.SProto:    constant.ProtobufSerialization,
+// LoadSerializer resolves and pins the serialization of the package by its
+// header serialization id (defaulting to hessian2, as before).
+//
+// Deprecated: the codec resolves serializations itself; pin one explicitly
+// via SetSerialization if needed.
+func LoadSerializer(p *DubboPackage) error {
+	// NOTE: default serialID is S_Hessian
+	serialID := p.Header.SerialID
+	if serialID == 0 {
+		serialID = constant.SHessian2
 	}
-}
-
-func SetSerializer(name string, serializer Serializer) {
-	serializers[name] = serializer
-}
-
-func GetSerializerById(id byte) (Serializer, error) {
-	name, ok := nameMaps[id]
-	if !ok {
-		panic(fmt.Sprintf("serialId %d not found", id))
+	ss, err := serialize.GetDubboSerializationByID(serialID)
+	if err != nil {
+		return err
 	}
-	serializer, ok := serializers[name]
-	if !ok {
-		panic(fmt.Sprintf("serialization %s not found", name))
-	}
-	return serializer, nil
+	p.SetSerialization(ss)
+	return nil
 }

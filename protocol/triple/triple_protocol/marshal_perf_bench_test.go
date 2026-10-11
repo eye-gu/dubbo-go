@@ -27,6 +27,9 @@ import (
 )
 
 import (
+	"dubbo.apache.org/dubbo-go/v3/common/serialize"
+	"dubbo.apache.org/dubbo-go/v3/common/serialize/hessian2"
+	"dubbo.apache.org/dubbo-go/v3/common/serialize/msgpack"
 	pingv1 "dubbo.apache.org/dubbo-go/v3/protocol/triple/triple_protocol/internal/gen/proto/connect/ping/v1"
 )
 
@@ -184,10 +187,10 @@ func newWrapperPerfMessage(size int) []any {
 func runWrapperBench(b *testing.B, slow bool) {
 	for _, inner := range []struct {
 		name  string
-		codec Codec
+		codec serialize.Serialization
 	}{
-		{name: "hessian2", codec: &hessian2Codec{}},
-		{name: "msgpack", codec: &msgpackCodec{}},
+		{name: "hessian2", codec: hessian2.Serialization{}},
+		{name: "msgpack", codec: msgpack.Serialization{}},
 	} {
 		b.Run(inner.name, func(b *testing.B) {
 			var codec Codec = newProtoWrapperCodec(inner.codec)

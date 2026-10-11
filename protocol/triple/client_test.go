@@ -303,36 +303,32 @@ func Test_newClientManager_Serialization(t *testing.T) {
 		desc          string
 		serialization string
 		expectIDL     bool
-		expectPanic   bool
+		expectError   bool
 	}{
 		{
 			desc:          "protobuf serialization",
 			serialization: constant.ProtobufSerialization,
 			expectIDL:     true,
-			expectPanic:   false,
 		},
 		{
 			desc:          "json serialization",
 			serialization: constant.JSONSerialization,
 			expectIDL:     true,
-			expectPanic:   false,
 		},
 		{
 			desc:          "hessian2 serialization",
 			serialization: constant.Hessian2Serialization,
 			expectIDL:     false,
-			expectPanic:   false,
 		},
 		{
 			desc:          "msgpack serialization",
 			serialization: constant.MsgpackSerialization,
 			expectIDL:     false,
-			expectPanic:   false,
 		},
 		{
 			desc:          "unsupported serialization",
 			serialization: "unsupported",
-			expectPanic:   true,
+			expectError:   true,
 		},
 	}
 
@@ -345,16 +341,16 @@ func Test_newClientManager_Serialization(t *testing.T) {
 				common.WithParamsValue(constant.SerializationKey, test.serialization),
 			)
 
-			if test.expectPanic {
-				assert.Panics(t, func() {
-					_, _ = newClientManager(url)
-				})
-			} else {
-				cm, err := newClientManager(url)
-				require.NoError(t, err)
-				assert.NotNil(t, cm)
-				assert.Equal(t, test.expectIDL, cm.isIDL)
+			if test.expectError {
+				_, err := newClientManager(url)
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "not found, registered:")
+				return
 			}
+			cm, err := newClientManager(url)
+			require.NoError(t, err)
+			assert.NotNil(t, cm)
+			assert.Equal(t, test.expectIDL, cm.isIDL)
 		})
 	}
 }

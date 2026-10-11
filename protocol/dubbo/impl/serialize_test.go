@@ -1,6 +1,6 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
@@ -34,9 +34,6 @@ import (
 
 // TestLoadSerializerWithDefaultHessian2 tests LoadSerializer with default Hessian2 serialization
 func TestLoadSerializerWithDefaultHessian2(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	pkg := NewDubboPackage(nil)
 	pkg.Header.SerialID = 0 // Default SerialID
 
@@ -47,9 +44,6 @@ func TestLoadSerializerWithDefaultHessian2(t *testing.T) {
 
 // TestLoadSerializerWithHessian2 tests LoadSerializer with explicit Hessian2 serialization
 func TestLoadSerializerWithHessian2(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	pkg := NewDubboPackage(nil)
 	pkg.Header.SerialID = constant.SHessian2
 
@@ -60,9 +54,6 @@ func TestLoadSerializerWithHessian2(t *testing.T) {
 
 // TestLoadSerializerWithDifferentValidID tests LoadSerializer with different valid serializer ID
 func TestLoadSerializerWithDifferentValidID(t *testing.T) {
-	mockHessianSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockHessianSerializer)
-
 	pkg := NewDubboPackage(nil)
 	pkg.Header.SerialID = constant.SHessian2
 
@@ -71,24 +62,17 @@ func TestLoadSerializerWithDifferentValidID(t *testing.T) {
 	assert.NotNil(t, pkg.Codec)
 }
 
-// TestLoadSerializerWithInvalidID tests LoadSerializer with invalid serializer ID panics
+// TestLoadSerializerWithInvalidID tests LoadSerializer with invalid serializer ID errors
 func TestLoadSerializerWithInvalidID(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	pkg := NewDubboPackage(nil)
 	pkg.Header.SerialID = 255 // Invalid serializer ID
 
-	assert.Panics(t, func() {
-		LoadSerializer(pkg)
-	})
+	err := LoadSerializer(pkg)
+	require.Error(t, err)
 }
 
 // TestLoadSerializerWithZeroIDDefaultsToHessian2 tests that SerialID 0 defaults to Hessian2
 func TestLoadSerializerWithZeroIDDefaultsToHessian2(t *testing.T) {
-	mockHessianSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockHessianSerializer)
-
 	pkg := NewDubboPackage(nil)
 	pkg.Header.SerialID = 0
 
@@ -100,9 +84,6 @@ func TestLoadSerializerWithZeroIDDefaultsToHessian2(t *testing.T) {
 
 // TestLoadSerializerWithNilPackage tests LoadSerializer handles package correctly
 func TestLoadSerializerWithNilPackage(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	pkg := NewDubboPackage(nil)
 	pkg.Header.SerialID = constant.SHessian2
 
@@ -114,9 +95,6 @@ func TestLoadSerializerWithNilPackage(t *testing.T) {
 
 // TestLoadSerializerMultipleInstances tests that LoadSerializer works with multiple packages
 func TestLoadSerializerMultipleInstances(t *testing.T) {
-	mockHessianSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockHessianSerializer)
-
 	pkg1 := NewDubboPackage(nil)
 	pkg1.Header.SerialID = constant.SHessian2
 
@@ -134,9 +112,6 @@ func TestLoadSerializerMultipleInstances(t *testing.T) {
 
 // TestLoadSerializerWithBufferedData tests LoadSerializer with buffered data in package
 func TestLoadSerializerWithBufferedData(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	data := bytes.NewBuffer([]byte{0x01, 0x02, 0x03})
 	pkg := NewDubboPackage(data)
 	pkg.Header.SerialID = constant.SHessian2
@@ -148,9 +123,6 @@ func TestLoadSerializerWithBufferedData(t *testing.T) {
 
 // TestLoadSerializerDoesNotPanicWithValidID tests LoadSerializer doesn't panic with valid IDs
 func TestLoadSerializerDoesNotPanicWithValidID(t *testing.T) {
-	mockHessianSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockHessianSerializer)
-
 	tests := []struct {
 		desc       string
 		serialID   byte
@@ -189,32 +161,17 @@ func TestLoadSerializerDoesNotPanicWithValidID(t *testing.T) {
 
 // TestLoadSerializerSetsSerializerInCodec tests that LoadSerializer properly sets the serializer in the codec
 func TestLoadSerializerSetsSerializerInCodec(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	pkg := NewDubboPackage(nil)
 	pkg.Header.SerialID = constant.SHessian2
 
 	err := LoadSerializer(pkg)
 	require.NoError(t, err)
 	assert.NotNil(t, pkg.Codec)
-	assert.NotNil(t, pkg.Codec.serializer)
-}
-
-// TestSerializerInterface tests that Serializer interface is properly defined
-func TestSerializerInterface(t *testing.T) {
-	// Verify that HessianSerializer implements Serializer interface
-	var _ Serializer = (*HessianSerializer)(nil)
-
-	mockSerializer := &HessianSerializer{}
-	assert.NotNil(t, mockSerializer)
+	assert.NotNil(t, pkg.Codec.serialization)
 }
 
 // TestLoadSerializerConsistency tests that LoadSerializer gives consistent results for same input
 func TestLoadSerializerConsistency(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	pkg1 := NewDubboPackage(nil)
 	pkg1.Header.SerialID = constant.SHessian2
 
@@ -229,30 +186,8 @@ func TestLoadSerializerConsistency(t *testing.T) {
 	assert.Equal(t, err1, err2)
 }
 
-// TestLoadSerializerReplacesExistingSerializer tests that LoadSerializer can replace existing serializer
-func TestLoadSerializerReplacesExistingSerializer(t *testing.T) {
-	mockSerializer1 := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer1)
-
-	pkg := NewDubboPackage(nil)
-	pkg.Header.SerialID = constant.SHessian2
-
-	err1 := LoadSerializer(pkg)
-	require.NoError(t, err1)
-
-	// Create a new mock serializer and replace
-	mockSerializer2 := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer2)
-
-	err2 := LoadSerializer(pkg)
-	assert.NoError(t, err2)
-}
-
 // TestLoadSerializerWithAllBytesValues tests LoadSerializer with various byte values
 func TestLoadSerializerWithAllBytesValues(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	validValues := []byte{
 		0,                  // Default - should map to Hessian2
 		constant.SHessian2, // Explicit Hessian2
@@ -272,11 +207,8 @@ func TestLoadSerializerWithAllBytesValues(t *testing.T) {
 	}
 }
 
-// TestLoadSerializerWithInvalidByteValues tests that invalid byte values panic
+// TestLoadSerializerWithInvalidByteValues tests that invalid byte values error
 func TestLoadSerializerWithInvalidByteValues(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	// Use a known invalid value that should not be registered as a serializer ID.
 	invalidValues := []byte{255}
 
@@ -285,18 +217,14 @@ func TestLoadSerializerWithInvalidByteValues(t *testing.T) {
 			pkg := NewDubboPackage(nil)
 			pkg.Header.SerialID = byteVal
 
-			assert.Panics(t, func() {
-				LoadSerializer(pkg)
-			})
+			err := LoadSerializer(pkg)
+			require.Error(t, err)
 		})
 	}
 }
 
 // TestLoadSerializerErrorHandling tests error handling in LoadSerializer
 func TestLoadSerializerErrorHandling(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	pkg := NewDubboPackage(nil)
 	pkg.Header.SerialID = constant.SHessian2
 
@@ -309,9 +237,6 @@ func TestLoadSerializerErrorHandling(t *testing.T) {
 
 // TestLoadSerializerCodecIsNotNil tests that Codec is properly initialized
 func TestLoadSerializerCodecIsNotNil(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	pkg := NewDubboPackage(nil)
 	pkg.Header.SerialID = constant.SHessian2
 
@@ -327,9 +252,6 @@ func TestLoadSerializerCodecIsNotNil(t *testing.T) {
 
 // TestLoadSerializerWithHeaderData tests LoadSerializer properly uses Header.SerialID
 func TestLoadSerializerWithHeaderData(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	pkg := NewDubboPackage(nil)
 	// Explicitly set Header fields
 	pkg.Header.SerialID = constant.SHessian2
@@ -344,9 +266,6 @@ func TestLoadSerializerWithHeaderData(t *testing.T) {
 
 // TestLoadSerializerSequentialCalls tests multiple sequential LoadSerializer calls
 func TestLoadSerializerSequentialCalls(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	for i := range 5 {
 		pkg := NewDubboPackage(nil)
 		pkg.Header.SerialID = constant.SHessian2
@@ -360,9 +279,6 @@ func TestLoadSerializerSequentialCalls(t *testing.T) {
 
 // TestLoadSerializerWithDataBuffer tests LoadSerializer with data buffer
 func TestLoadSerializerWithDataBuffer(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	testData := []byte{0xDA, 0xBB, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 	data := bytes.NewBuffer(testData)
 	pkg := NewDubboPackage(data)
@@ -373,87 +289,8 @@ func TestLoadSerializerWithDataBuffer(t *testing.T) {
 	assert.NotNil(t, pkg.Codec)
 }
 
-// TestHessianSerializerMarshalRequest tests Hessian serializer marshal for request
-func TestHessianSerializerMarshalRequest(t *testing.T) {
-	serializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, serializer)
-
-	pkg := NewDubboPackage(nil)
-	pkg.Body = []any{"test"}
-	pkg.Header.Type = PackageRequest
-	pkg.Header.SerialID = constant.SHessian2
-	pkg.Header.ID = 12345
-	pkg.Service.Interface = "TestInterface"
-	pkg.Service.Path = "test.path"
-	pkg.Service.Method = "testMethod"
-	pkg.SetSerializer(serializer)
-
-	data, err := pkg.Marshal()
-	require.NoError(t, err)
-	assert.NotNil(t, data)
-	assert.Positive(t, data.Len())
-}
-
-// TestHessianSerializerMarshalResponse tests Hessian serializer marshal for response
-func TestHessianSerializerMarshalResponse(t *testing.T) {
-	serializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, serializer)
-
-	pkg := NewDubboPackage(nil)
-	pkg.Body = "response data"
-	pkg.Header.Type = PackageResponse
-	pkg.Header.SerialID = constant.SHessian2
-	pkg.Header.ID = 54321
-	pkg.Header.ResponseStatus = Response_OK
-	pkg.SetSerializer(serializer)
-
-	data, err := pkg.Marshal()
-	require.NoError(t, err)
-	assert.NotNil(t, data)
-	assert.Positive(t, data.Len())
-}
-
-// TestHessianSerializerMarshalResponseWithException tests Hessian marshaling for exception response
-func TestHessianSerializerMarshalResponseWithException(t *testing.T) {
-	serializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, serializer)
-
-	pkg := NewDubboPackage(nil)
-	pkg.Body = []any{} // Empty body for exception response
-	pkg.Header.Type = PackageResponse
-	pkg.Header.SerialID = constant.SHessian2
-	pkg.Header.ID = 99999
-	pkg.Header.ResponseStatus = Response_SERVICE_ERROR
-	pkg.SetSerializer(serializer)
-
-	data, err := pkg.Marshal()
-	require.NoError(t, err)
-	assert.NotNil(t, data)
-}
-
-// TestHessianSerializerMarshalHeartbeat tests Hessian serializer marshal for heartbeat
-func TestHessianSerializerMarshalHeartbeat(t *testing.T) {
-	serializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, serializer)
-
-	pkg := NewDubboPackage(nil)
-	pkg.Body = []any{}
-	pkg.Header.Type = PackageHeartbeat
-	pkg.Header.SerialID = constant.SHessian2
-	pkg.Header.ID = 77777
-	pkg.SetSerializer(serializer)
-
-	data, err := pkg.Marshal()
-	require.NoError(t, err)
-	assert.NotNil(t, data)
-	assert.Positive(t, data.Len())
-}
-
 // TestLoadSerializerWithMultipleCalls tests LoadSerializer consistency
 func TestLoadSerializerWithMultipleCalls(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	// Call LoadSerializer multiple times
 	for range 5 {
 		pkg := NewDubboPackage(nil)
@@ -461,15 +298,12 @@ func TestLoadSerializerWithMultipleCalls(t *testing.T) {
 
 		err := LoadSerializer(pkg)
 		require.NoError(t, err)
-		assert.NotNil(t, pkg.Codec.serializer)
+		assert.NotNil(t, pkg.Codec.serialization)
 	}
 }
 
 // TestLoadSerializerPackageInheritance tests that loaded serializer persists in package
 func TestLoadSerializerPackageInheritance(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	pkg := NewDubboPackage(nil)
 	pkg.Header.SerialID = constant.SHessian2
 	pkg.Header.Type = PackageRequest

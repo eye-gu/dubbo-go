@@ -32,6 +32,9 @@ import (
 )
 
 import (
+	"dubbo.apache.org/dubbo-go/v3/common/serialize"
+	"dubbo.apache.org/dubbo-go/v3/common/serialize/hessian2"
+	"dubbo.apache.org/dubbo-go/v3/common/serialize/msgpack"
 	"dubbo.apache.org/dubbo-go/v3/protocol/triple/triple_protocol/internal/assert"
 	pingv1 "dubbo.apache.org/dubbo-go/v3/protocol/triple/triple_protocol/internal/gen/proto/connect/ping/v1"
 )
@@ -129,7 +132,7 @@ func TestMsgpackCodec(t *testing.T) {
 			Number: 1234,
 			Text:   "5678",
 		}
-		codec := &msgpackCodec{}
+		codec := msgpack.Serialization{}
 		binary, err := codec.Marshal(want)
 		assert.Nil(t, err)
 		var got pingv1.PingRequest
@@ -141,13 +144,13 @@ func TestMsgpackCodec(t *testing.T) {
 
 	t.Run("name returns msgpack", func(t *testing.T) {
 		t.Parallel()
-		codec := &msgpackCodec{}
+		codec := msgpack.Serialization{}
 		assert.Equal(t, codecNameMsgPack, codec.Name())
 	})
 
 	t.Run("marshal nil returns empty bytes", func(t *testing.T) {
 		t.Parallel()
-		codec := &msgpackCodec{}
+		codec := msgpack.Serialization{}
 		data, err := codec.Marshal(nil)
 		assert.Nil(t, err)
 		assert.Equal(t, []byte{0xc0}, data)
@@ -155,14 +158,14 @@ func TestMsgpackCodec(t *testing.T) {
 
 	t.Run("unmarshal into nil returns error", func(t *testing.T) {
 		t.Parallel()
-		codec := &msgpackCodec{}
+		codec := msgpack.Serialization{}
 		err := codec.Unmarshal([]byte{0xc0}, nil)
 		assert.NotNil(t, err)
 	})
 
 	t.Run("unmarshal invalid data returns error", func(t *testing.T) {
 		t.Parallel()
-		codec := &msgpackCodec{}
+		codec := msgpack.Serialization{}
 		var got pingv1.PingRequest
 		err := codec.Unmarshal([]byte{0xff, 0xff, 0xff}, &got)
 		assert.NotNil(t, err)
@@ -171,7 +174,7 @@ func TestMsgpackCodec(t *testing.T) {
 	t.Run("roundtrip with empty string", func(t *testing.T) {
 		t.Parallel()
 		want := &pingv1.PingRequest{Text: "", Number: 0}
-		codec := &msgpackCodec{}
+		codec := msgpack.Serialization{}
 		data, err := codec.Marshal(want)
 		assert.Nil(t, err)
 		var got pingv1.PingRequest
@@ -186,13 +189,13 @@ func TestHessian2Codec(t *testing.T) {
 
 	t.Run("name returns hessian2", func(t *testing.T) {
 		t.Parallel()
-		codec := &hessian2Codec{}
+		codec := hessian2.Serialization{}
 		assert.Equal(t, codecNameHessian2, codec.Name())
 	})
 
 	t.Run("roundtrip string", func(t *testing.T) {
 		t.Parallel()
-		codec := &hessian2Codec{}
+		codec := hessian2.Serialization{}
 		want := "hello dubbo-go"
 		data, err := codec.Marshal(want)
 		assert.Nil(t, err)
@@ -204,7 +207,7 @@ func TestHessian2Codec(t *testing.T) {
 
 	t.Run("roundtrip int32", func(t *testing.T) {
 		t.Parallel()
-		codec := &hessian2Codec{}
+		codec := hessian2.Serialization{}
 		want := int32(42)
 		data, err := codec.Marshal(want)
 		assert.Nil(t, err)
@@ -216,7 +219,7 @@ func TestHessian2Codec(t *testing.T) {
 
 	t.Run("roundtrip int64", func(t *testing.T) {
 		t.Parallel()
-		codec := &hessian2Codec{}
+		codec := hessian2.Serialization{}
 		want := int64(9223372036854775807)
 		data, err := codec.Marshal(want)
 		assert.Nil(t, err)
@@ -228,7 +231,7 @@ func TestHessian2Codec(t *testing.T) {
 
 	t.Run("roundtrip bool true", func(t *testing.T) {
 		t.Parallel()
-		codec := &hessian2Codec{}
+		codec := hessian2.Serialization{}
 		want := true
 		data, err := codec.Marshal(want)
 		assert.Nil(t, err)
@@ -240,7 +243,7 @@ func TestHessian2Codec(t *testing.T) {
 
 	t.Run("roundtrip bool false", func(t *testing.T) {
 		t.Parallel()
-		codec := &hessian2Codec{}
+		codec := hessian2.Serialization{}
 		want := false
 		data, err := codec.Marshal(want)
 		assert.Nil(t, err)
@@ -252,7 +255,7 @@ func TestHessian2Codec(t *testing.T) {
 
 	t.Run("roundtrip byte slice", func(t *testing.T) {
 		t.Parallel()
-		codec := &hessian2Codec{}
+		codec := hessian2.Serialization{}
 		want := []byte{0x01, 0x02, 0x03, 0x04}
 		data, err := codec.Marshal(want)
 		assert.Nil(t, err)
@@ -264,7 +267,7 @@ func TestHessian2Codec(t *testing.T) {
 
 	t.Run("roundtrip map", func(t *testing.T) {
 		t.Parallel()
-		codec := &hessian2Codec{}
+		codec := hessian2.Serialization{}
 		want := map[any]any{"key1": "value1", "key2": int64(42)}
 		data, err := codec.Marshal(want)
 		assert.Nil(t, err)
@@ -276,7 +279,7 @@ func TestHessian2Codec(t *testing.T) {
 
 	t.Run("roundtrip string slice", func(t *testing.T) {
 		t.Parallel()
-		codec := &hessian2Codec{}
+		codec := hessian2.Serialization{}
 		want := []string{"a", "b", "c"}
 		data, err := codec.Marshal(want)
 		assert.Nil(t, err)
@@ -288,7 +291,7 @@ func TestHessian2Codec(t *testing.T) {
 
 	t.Run("marshal nil returns nil bytes", func(t *testing.T) {
 		t.Parallel()
-		codec := &hessian2Codec{}
+		codec := hessian2.Serialization{}
 		data, err := codec.Marshal(nil)
 		assert.Nil(t, err)
 		assert.Equal(t, []byte{'N'}, data)
@@ -296,7 +299,7 @@ func TestHessian2Codec(t *testing.T) {
 
 	t.Run("unmarshal into non-pointer returns error", func(t *testing.T) {
 		t.Parallel()
-		codec := &hessian2Codec{}
+		codec := hessian2.Serialization{}
 		var got string
 		err := codec.Unmarshal([]byte{'N'}, got)
 		assert.NotNil(t, err)
@@ -304,7 +307,7 @@ func TestHessian2Codec(t *testing.T) {
 
 	t.Run("unmarshal nil pointer returns error", func(t *testing.T) {
 		t.Parallel()
-		codec := &hessian2Codec{}
+		codec := hessian2.Serialization{}
 		var got *string
 		err := codec.Unmarshal([]byte{'N'}, got)
 		assert.NotNil(t, err)
@@ -312,14 +315,14 @@ func TestHessian2Codec(t *testing.T) {
 
 	t.Run("unmarshal into nil returns error", func(t *testing.T) {
 		t.Parallel()
-		codec := &hessian2Codec{}
+		codec := hessian2.Serialization{}
 		err := codec.Unmarshal([]byte{'N'}, nil)
 		assert.NotNil(t, err)
 	})
 
 	t.Run("roundtrip empty string", func(t *testing.T) {
 		t.Parallel()
-		codec := &hessian2Codec{}
+		codec := hessian2.Serialization{}
 		want := ""
 		data, err := codec.Marshal(want)
 		assert.Nil(t, err)
@@ -331,7 +334,7 @@ func TestHessian2Codec(t *testing.T) {
 
 	t.Run("roundtrip empty map", func(t *testing.T) {
 		t.Parallel()
-		codec := &hessian2Codec{}
+		codec := hessian2.Serialization{}
 		want := map[string]string{}
 		data, err := codec.Marshal(want)
 		assert.Nil(t, err)
@@ -341,9 +344,9 @@ func TestHessian2Codec(t *testing.T) {
 		assert.Equal(t, len(want), len(got))
 	})
 
-	t.Run("implements Codec interface", func(t *testing.T) {
+	t.Run("implements Serialization interface", func(t *testing.T) {
 		t.Parallel()
-		var _ Codec = (*hessian2Codec)(nil)
+		var _ serialize.Serialization = hessian2.Serialization{}
 	})
 }
 

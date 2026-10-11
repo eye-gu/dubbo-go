@@ -18,6 +18,7 @@
 package impl
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"reflect"
@@ -28,7 +29,6 @@ import (
 
 import (
 	hessian "github.com/apache/dubbo-go-hessian2"
-	"github.com/apache/dubbo-go-hessian2/java_exception"
 
 	"github.com/dubbogo/gost/log/logger"
 
@@ -38,149 +38,82 @@ import (
 import (
 	"dubbo.apache.org/dubbo-go/v3/common"
 	"dubbo.apache.org/dubbo-go/v3/common/constant"
-	"dubbo.apache.org/dubbo-go/v3/protocol/dubbo/hessian2"
+	"dubbo.apache.org/dubbo-go/v3/common/serialize"
 )
 
-type HessianSerializer struct{}
+// encodeBody writes the dubbo wire protocol body (request or response
+// envelope) with the primitives of the given serialization.
+func encodeBody(p DubboPackage, ss serialize.DubboSerialization) ([]byte, error) {
+	var buf bytes.Buffer
+	out := ss.NewObjectOutput(&buf)
 
-func (h HessianSerializer) Marshal(p DubboPackage) ([]byte, error) {
-	encoder := hessian.NewEncoder()
-	if p.IsRequest() {
-		return marshalRequest(encoder, p)
+	if p.IsHeartBeat() && p.Header.ResponseStatus == Zero {
+		// heartbeat request body carries a single null token
+		if err := out.WriteObject(nil); err != nil {
+			return nil, err
+		}
+	} else if p.IsRequest() {
+		if err := encodeRequestBody(out, p); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := encodeResponseBody(out, p); err != nil {
+			return nil, err
+		}
+		// response bodies are terminated by a trailing null, dubbo protocol compat
+		if err := out.WriteObject(nil); err != nil {
+			return nil, err
+		}
 	}
-	return marshalResponse(encoder, p)
-}
 
-func (h HessianSerializer) Unmarshal(input []byte, p *DubboPackage) error {
-	if p.IsHeartBeat() {
-		return nil
-	}
-	if p.IsRequest() {
-		return unmarshalRequestBody(input, p)
-	}
-	return unmarshalResponseBody(input, p)
-}
-
-func marshalResponse(encoder *hessian.Encoder, p DubboPackage) ([]byte, error) {
-	response := EnsureResponsePayload(p.Body)
-	if err := encodeResponse(encoder, p, response); err != nil {
+	if err := out.Flush(); err != nil {
 		return nil, err
 	}
-	bs := encoder.Buffer()
-	// encNull
-	bs = append(bs, byte('N'))
-	return bs, nil
+	return buf.Bytes(), nil
 }
 
-func encodeResponse(encoder *hessian.Encoder, p DubboPackage, response *ResponsePayload) error {
-	if p.Header.ResponseStatus != Response_OK {
-		if response.Exception != nil {
-			return encodeHessianValue(encoder, response.Exception.Error(), "response exception message")
-		}
-		return encodeHessianValue(encoder, response.RspObj, "response value")
+// decodeBody reads the dubbo wire protocol body (request or response
+// envelope) with the primitives of the given serialization.
+func decodeBody(body []byte, p *DubboPackage, ss serialize.DubboSerialization) error {
+	in := ss.NewObjectInput(bytes.NewReader(body))
+	if p.IsRequest() {
+		return decodeRequestBody(in, p)
 	}
-	if p.IsHeartBeat() {
-		return encodeHessianValue(encoder, nil, "heartbeat response")
-	}
-
-	var version string
-	if attachmentVersion, ok := response.Attachments[DUBBO_VERSION_KEY]; ok {
-		version = attachmentVersion.(string)
-	}
-	withAttachments := isSupportResponseAttachment(version)
-	resWithException, resValue, resNullValue := responseTypes(withAttachments)
-
-	if err := encodeResponsePayload(encoder, response, resWithException, resValue, resNullValue); err != nil {
-		return err
-	}
-	if withAttachments {
-		return encodeHessianValue(encoder, response.Attachments, "response attachments")
-	}
-	return nil
+	return decodeResponseBody(in, p)
 }
 
-func encodeResponsePayload(encoder *hessian.Encoder, response *ResponsePayload, resWithException, resValue, resNullValue int32) error {
-	if response.Exception != nil {
-		return encodeExceptionResponse(encoder, response.Exception, resWithException)
-	}
-	if response.RspObj == nil {
-		return encodeHessianValue(encoder, resNullValue, "null response type")
-	}
-	if err := encodeHessianValue(encoder, resValue, "response value type"); err != nil {
-		return err
-	}
-	return encodeHessianValue(encoder, response.RspObj, "response value")
-}
-
-func responseTypes(withAttachments bool) (int32, int32, int32) {
-	if withAttachments {
-		return RESPONSE_WITH_EXCEPTION_WITH_ATTACHMENTS, RESPONSE_VALUE_WITH_ATTACHMENTS, RESPONSE_NULL_VALUE_WITH_ATTACHMENTS
-	}
-	return RESPONSE_WITH_EXCEPTION, RESPONSE_VALUE, RESPONSE_NULL_VALUE
-}
-
-func encodeResponseException(encoder *hessian.Encoder, exception error) error {
-	var value any
-	switch ex := exception.(type) {
-	case *hessian.GenericException:
-		value = java_exception.NewDubboGenericException(ex.ExceptionClass, ex.ExceptionMessage)
-	case hessian.GenericException:
-		value = java_exception.NewDubboGenericException(ex.ExceptionClass, ex.ExceptionMessage)
-	case java_exception.Throwabler:
-		value = ex
-	default:
-		value = java_exception.NewThrowable(exception.Error())
-	}
-	return encodeHessianValue(encoder, value, "response exception")
-}
-
-func encodeExceptionResponse(encoder *hessian.Encoder, exception error, responseType int32) error {
-	if err := encodeHessianValue(encoder, responseType, "response exception type"); err != nil {
-		return err
-	}
-	return encodeResponseException(encoder, exception)
-}
-
-func encodeHessianValue(encoder *hessian.Encoder, value any, description string) error {
-	if err := encoder.Encode(value); err != nil {
-		return fmt.Errorf("failed to encode %s: %w", description, err)
-	}
-	return nil
-}
-
-func marshalRequest(encoder *hessian.Encoder, p DubboPackage) ([]byte, error) {
+func encodeRequestBody(out serialize.ObjectOutput, p DubboPackage) error {
 	service := p.Service
 	request := EnsureRequestPayload(p.Body)
-	if err := encodeHessianValue(encoder, DEFAULT_DUBBO_PROTOCOL_VERSION, "dubbo protocol version"); err != nil {
-		return nil, err
+	if err := out.WriteUTF(DEFAULT_DUBBO_PROTOCOL_VERSION); err != nil {
+		return err
 	}
-	if err := encodeHessianValue(encoder, service.Path, "service path"); err != nil {
-		return nil, err
+	if err := out.WriteUTF(service.Path); err != nil {
+		return err
 	}
-	if err := encodeHessianValue(encoder, service.Version, "service version"); err != nil {
-		return nil, err
+	if err := out.WriteUTF(service.Version); err != nil {
+		return err
 	}
-	if err := encodeHessianValue(encoder, service.Method, "service method"); err != nil {
-		return nil, err
+	if err := out.WriteUTF(service.Method); err != nil {
+		return err
 	}
 
 	args, ok := request.Params.([]any)
 
 	if !ok {
 		logger.Infof("[Dubbo] request args, params=%v", request.Params)
-		return nil, fmt.Errorf("@params is not of type: []any")
+		return fmt.Errorf("@params is not of type: []any")
 	}
 	types, err := GetArgsTypeList(args)
 	if err != nil {
-		return nil, fmt.Errorf(" PackRequest(args:%+v): %w", args, err)
+		return fmt.Errorf(" PackRequest(args:%+v): %w", args, err)
 	}
-	err = encodeHessianValue(encoder, types, "argument types")
-	if err != nil {
-		return nil, err
+	if err := out.WriteUTF(types); err != nil {
+		return err
 	}
 	for _, v := range args {
-		if e := encoder.Encode(v); e != nil {
-			return nil, fmt.Errorf("failed to encode argument: %v: %w", v, e)
+		if err := out.WriteObject(v); err != nil {
+			return fmt.Errorf("failed to encode argument: %v: %w", v, err)
 		}
 	}
 
@@ -196,8 +129,58 @@ func marshalRequest(encoder *hessian.Encoder, p DubboPackage) ([]byte, error) {
 		request.Attachments[TIMEOUT_KEY] = strconv.Itoa(int(service.Timeout / time.Millisecond))
 	}
 
-	err = encoder.Encode(request.Attachments)
-	return encoder.Buffer(), err
+	return out.WriteAttachments(request.Attachments)
+}
+
+func encodeResponseBody(out serialize.ObjectOutput, p DubboPackage) error {
+	response := EnsureResponsePayload(p.Body)
+	if p.Header.ResponseStatus != Response_OK {
+		if response.Exception != nil {
+			return out.WriteObject(response.Exception.Error())
+		}
+		return out.WriteObject(response.RspObj)
+	}
+	if p.IsHeartBeat() {
+		return out.WriteObject(nil)
+	}
+
+	var version string
+	if attachmentVersion, ok := response.Attachments[DUBBO_VERSION_KEY]; ok {
+		version = attachmentVersion.(string)
+	}
+	withAttachments := isSupportResponseAttachment(version)
+	resWithException, resValue, resNullValue := responseTypes(withAttachments)
+
+	if response.Exception != nil {
+		if err := out.WriteByte(byte(resWithException)); err != nil {
+			return err
+		}
+		if err := out.WriteThrowable(response.Exception); err != nil {
+			return err
+		}
+	} else if response.RspObj == nil {
+		if err := out.WriteByte(byte(resNullValue)); err != nil {
+			return err
+		}
+	} else {
+		if err := out.WriteByte(byte(resValue)); err != nil {
+			return err
+		}
+		if err := out.WriteObject(response.RspObj); err != nil {
+			return err
+		}
+	}
+	if withAttachments {
+		return out.WriteAttachments(response.Attachments)
+	}
+	return nil
+}
+
+func responseTypes(withAttachments bool) (int32, int32, int32) {
+	if withAttachments {
+		return RESPONSE_WITH_EXCEPTION_WITH_ATTACHMENTS, RESPONSE_VALUE_WITH_ATTACHMENTS, RESPONSE_NULL_VALUE_WITH_ATTACHMENTS
+	}
+	return RESPONSE_WITH_EXCEPTION, RESPONSE_VALUE, RESPONSE_NULL_VALUE
 }
 
 // https://github.com/apache/dubbo/blob/dubbo-2.7.1/dubbo-common/src/main/java/org/apache/dubbo/common/Version.java#L96
@@ -235,150 +218,125 @@ func version2Int(version string) int {
 	return v
 }
 
-func unmarshalRequestBody(body []byte, p *DubboPackage) error {
+func decodeRequestBody(in serialize.ObjectInput, p *DubboPackage) error {
 	if p.Body == nil {
 		p.SetBody(make([]any, 7))
 	}
-	decoder := hessian.NewDecoder(body)
-	var (
-		err                                                     error
-		dubboVersion, target, serviceVersion, method, argsTypes any
-		args                                                    []any
-	)
 	req, ok := p.Body.([]any)
 	if !ok {
 		return fmt.Errorf("@reqObj is not of type: []any")
 	}
-	dubboVersion, err = decoder.Decode()
+
+	dubboVersion, err := in.ReadUTF()
 	if err != nil {
 		return perrors.WithStack(err)
 	}
 	req[0] = dubboVersion
 
-	target, err = decoder.Decode()
+	target, err := in.ReadUTF()
 	if err != nil {
 		return perrors.WithStack(err)
 	}
 	req[1] = target
 
-	serviceVersion, err = decoder.Decode()
+	serviceVersion, err := in.ReadUTF()
 	if err != nil {
 		return perrors.WithStack(err)
 	}
 	req[2] = serviceVersion
 
-	method, err = decoder.Decode()
+	method, err := in.ReadUTF()
 	if err != nil {
 		return perrors.WithStack(err)
 	}
 	req[3] = method
 
-	argsTypes, err = decoder.Decode()
+	argsTypes, err := in.ReadUTF()
 	if err != nil {
 		return perrors.WithStack(err)
 	}
 	req[4] = argsTypes
 
-	ats := hessian.DescRegex.FindAllString(argsTypes.(string), -1)
-	var arg any
+	ats := hessian.DescRegex.FindAllString(argsTypes, -1)
+	var args []any
 	for range ats {
-		arg, err = decoder.Decode()
-		if err != nil {
+		var arg any
+		if err := in.ReadObject(&arg); err != nil {
 			return perrors.WithStack(err)
 		}
 		args = append(args, arg)
 	}
 	req[5] = args
 
-	attachments, err := decoder.Decode()
+	attachments, err := in.ReadAttachments()
 	if err != nil {
 		return perrors.WithStack(err)
 	}
-
-	if attachments == nil || attachments == "" {
-		attachments = map[any]any{constant.InterfaceKey: target}
+	if attachments == nil {
+		attachments = map[string]any{constant.InterfaceKey: target}
 	}
+	attachments[DUBBO_VERSION_KEY] = dubboVersion
+	req[6] = attachments
 
-	if v, ok := attachments.(map[any]any); ok {
-		v[DUBBO_VERSION_KEY] = dubboVersion
-		req[6] = ToMapStringInterface(v)
-		buildServerSidePackageBody(p)
-		return nil
-	}
-	return fmt.Errorf("get wrong attachments: %+v", attachments)
+	buildServerSidePackageBody(p)
+	return nil
 }
 
-func unmarshalResponseBody(body []byte, p *DubboPackage) error {
-	decoder := hessian.NewDecoder(body)
-	rspType, err := decoder.Decode()
+func decodeResponseBody(in serialize.ObjectInput, p *DubboPackage) error {
 	if p.Body == nil {
 		p.SetBody(&ResponsePayload{})
 	}
+	rspType, err := in.ReadByte()
 	if err != nil {
 		return perrors.WithStack(err)
 	}
 	response := EnsureResponsePayload(p.Body)
 
 	switch rspType {
-	case RESPONSE_WITH_EXCEPTION, RESPONSE_WITH_EXCEPTION_WITH_ATTACHMENTS:
-		expt, err := decoder.Decode()
+	case byte(RESPONSE_WITH_EXCEPTION), byte(RESPONSE_WITH_EXCEPTION_WITH_ATTACHMENTS):
+		exception, err := in.ReadThrowable()
 		if err != nil {
 			return perrors.WithStack(err)
 		}
-		if rspType == RESPONSE_WITH_EXCEPTION_WITH_ATTACHMENTS {
-			attachments, err := decoder.Decode()
+		if rspType == byte(RESPONSE_WITH_EXCEPTION_WITH_ATTACHMENTS) {
+			attachments, err := in.ReadAttachments()
 			if err != nil {
 				return perrors.WithStack(err)
 			}
-			if v, ok := attachments.(map[any]any); ok {
-				atta := ToMapStringInterface(v)
-				response.Attachments = atta
-			} else {
+			if attachments == nil {
 				return fmt.Errorf("get wrong attachments: %+v", attachments)
 			}
+			response.Attachments = attachments
 		}
+		response.Exception = exception
+		return nil
 
-		if g, ok := hessian.ToGenericException(expt); ok {
-			response.Exception = g
-		} else if e, ok := expt.(error); ok {
-			response.Exception = e
-		} else {
-			response.Exception = fmt.Errorf("got exception: %+v", expt)
+	case byte(RESPONSE_VALUE), byte(RESPONSE_VALUE_WITH_ATTACHMENTS):
+		if err := in.ReadObject(response.RspObj); err != nil {
+			return perrors.WithStack(err)
+		}
+		if rspType == byte(RESPONSE_VALUE_WITH_ATTACHMENTS) {
+			attachments, err := in.ReadAttachments()
+			if err != nil {
+				return perrors.WithStack(err)
+			}
+			if attachments == nil {
+				return fmt.Errorf("get wrong attachments: %+v", attachments)
+			}
+			response.Attachments = attachments
 		}
 		return nil
 
-	case RESPONSE_VALUE, RESPONSE_VALUE_WITH_ATTACHMENTS:
-		rsp, err := decoder.Decode()
-		if err != nil {
-			return perrors.WithStack(err)
-		}
-		if rspType == RESPONSE_VALUE_WITH_ATTACHMENTS {
-			attachments, err := decoder.Decode()
+	case byte(RESPONSE_NULL_VALUE), byte(RESPONSE_NULL_VALUE_WITH_ATTACHMENTS):
+		if rspType == byte(RESPONSE_NULL_VALUE_WITH_ATTACHMENTS) {
+			attachments, err := in.ReadAttachments()
 			if err != nil {
 				return perrors.WithStack(err)
 			}
-			if v, ok := attachments.(map[any]any); ok {
-				atta := ToMapStringInterface(v)
-				response.Attachments = atta
-			} else {
+			if attachments == nil {
 				return fmt.Errorf("get wrong attachments: %+v", attachments)
 			}
-		}
-
-		return perrors.WithStack(hessian2.ReflectResponse(rsp, response.RspObj))
-
-	case RESPONSE_NULL_VALUE, RESPONSE_NULL_VALUE_WITH_ATTACHMENTS:
-		if rspType == RESPONSE_NULL_VALUE_WITH_ATTACHMENTS {
-			attachments, err := decoder.Decode()
-			if err != nil {
-				return perrors.WithStack(err)
-			}
-			if v, ok := attachments.(map[any]any); ok {
-				atta := ToMapStringInterface(v)
-				response.Attachments = atta
-			} else {
-				return fmt.Errorf("get wrong attachments: %+v", attachments)
-			}
+			response.Attachments = attachments
 		}
 		return nil
 	}
@@ -486,8 +444,6 @@ func getArgType(v any) string {
 		return "C"
 	case []uint16:
 		return "[C"
-	// case rune:
-	//	return "C"
 	case int:
 		return "J"
 	case []int:
@@ -585,8 +541,4 @@ func ToMapStringInterface(origin map[any]any) map[string]any {
 		}
 	}
 	return dest
-}
-
-func init() {
-	SetSerializer("hessian2", HessianSerializer{})
 }

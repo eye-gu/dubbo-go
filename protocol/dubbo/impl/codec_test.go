@@ -37,14 +37,12 @@ func TestDubboPackage_MarshalAndUnmarshal(t *testing.T) {
 	pkg.Header.Type = PackageHeartbeat
 	pkg.Header.SerialID = constant.SHessian2
 	pkg.Header.ID = 10086
-	pkg.SetSerializer(HessianSerializer{})
 
 	// heartbeat
 	data, err := pkg.Marshal()
 	require.NoError(t, err)
 
 	pkgres := NewDubboPackage(data)
-	pkgres.SetSerializer(HessianSerializer{})
 
 	pkgres.Body = []any{}
 	err = pkgres.Unmarshal()
@@ -65,7 +63,6 @@ func TestDubboPackage_MarshalAndUnmarshal(t *testing.T) {
 	require.NoError(t, err)
 
 	pkgres = NewDubboPackage(data)
-	pkgres.SetSerializer(HessianSerializer{})
 	pkgres.Body = make([]any, 7)
 	err = pkgres.Unmarshal()
 	reassembleBody := pkgres.GetBody().(map[string]any)
@@ -147,27 +144,26 @@ func TestEncodeHeaderRequestTwoWay(t *testing.T) {
 	assert.NotEmpty(t, header)
 }
 
-// TestProtocolCodecSetSerializer tests SetSerializer method of ProtocolCodec
-func TestProtocolCodecSetSerializer(t *testing.T) {
+// TestProtocolCodecSetSerialization tests SetSerialization method of ProtocolCodec
+func TestProtocolCodecSetSerialization(t *testing.T) {
 	codec := NewDubboCodec(nil)
-	serializer := &HessianSerializer{}
+	ss, err := hessian2Serialization()
+	require.NoError(t, err)
 
-	codec.SetSerializer(serializer)
-	assert.NotNil(t, codec.serializer)
+	codec.SetSerialization(ss)
+	resolved, err := codec.resolveSerialization(255)
+	require.NoError(t, err)
+	assert.Equal(t, ss, resolved, "pinned serialization must override header-id resolution")
 }
 
 // TestPackageResponseWorkflow tests response package workflow
 func TestPackageResponseWorkflow(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	pkg := NewDubboPackage(nil)
 	pkg.Header.Type = PackageResponse
 	pkg.Header.SerialID = constant.SHessian2
 	pkg.Header.ID = 99999
 	pkg.Header.ResponseStatus = Response_OK
 	pkg.Body = "response"
-	pkg.SetSerializer(mockSerializer)
 
 	assert.False(t, pkg.IsHeartBeat())
 	assert.False(t, pkg.IsRequest())
@@ -181,9 +177,6 @@ func TestPackageResponseWorkflow(t *testing.T) {
 
 // TestPackageRequestWorkflow tests request package workflow
 func TestPackageRequestWorkflow(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	pkg := NewDubboPackage(nil)
 	pkg.Header.Type = PackageRequest
 	pkg.Header.SerialID = constant.SHessian2
@@ -192,7 +185,6 @@ func TestPackageRequestWorkflow(t *testing.T) {
 	pkg.Service.Path = "/dubbo"
 	pkg.Service.Method = "test"
 	pkg.Body = []any{"arg1"}
-	pkg.SetSerializer(mockSerializer)
 
 	assert.False(t, pkg.IsHeartBeat())
 	assert.True(t, pkg.IsRequest())
@@ -294,9 +286,6 @@ func TestPackageResponseStatusWorkflow(t *testing.T) {
 
 // TestDubboPackageIntegrationWithLoadSerializer tests integration with LoadSerializer
 func TestDubboPackageIntegrationWithLoadSerializer(t *testing.T) {
-	mockSerializer := &HessianSerializer{}
-	SetSerializer(constant.Hessian2Serialization, mockSerializer)
-
 	pkg := NewDubboPackage(nil)
 	pkg.Header.SerialID = constant.SHessian2
 	pkg.Header.Type = PackageRequest

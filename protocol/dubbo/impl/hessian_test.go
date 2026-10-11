@@ -347,8 +347,8 @@ func TestIsSupportResponseAttachmentConcurrent(t *testing.T) {
 }
 
 func TestMarshalRequestWithTypedNilPointer(t *testing.T) {
-	encoder := hessian.NewEncoder()
 	pkg := DubboPackage{
+		Header: DubboHeader{Type: PackageRequest_TwoWay},
 		Service: Service{
 			Path:    "test.Path",
 			Version: "1.0.0",
@@ -362,15 +362,15 @@ func TestMarshalRequestWithTypedNilPointer(t *testing.T) {
 		},
 	}
 
-	data, err := marshalRequest(encoder, pkg)
+	data, err := marshalHessianBody(pkg)
 	require.NoError(t, err)
 	assert.NotNil(t, data)
 }
 
 func TestMarshalRequestWithNonNilPointer(t *testing.T) {
 	val := int32(42)
-	encoder := hessian.NewEncoder()
 	pkg := DubboPackage{
+		Header: DubboHeader{Type: PackageRequest_TwoWay},
 		Service: Service{
 			Path:    "test.Path",
 			Version: "1.0.0",
@@ -384,15 +384,15 @@ func TestMarshalRequestWithNonNilPointer(t *testing.T) {
 		},
 	}
 
-	data, err := marshalRequest(encoder, pkg)
+	data, err := marshalHessianBody(pkg)
 	require.NoError(t, err)
 	assert.NotNil(t, data)
 }
 
 func TestMarshalRequest(t *testing.T) {
 	t.Run("basic request", func(t *testing.T) {
-		encoder := hessian.NewEncoder()
 		pkg := DubboPackage{
+			Header: DubboHeader{Type: PackageRequest_TwoWay},
 			Service: Service{
 				Path:      "com.test.Service",
 				Interface: "com.test.Service",
@@ -407,14 +407,13 @@ func TestMarshalRequest(t *testing.T) {
 			},
 		}
 
-		data, err := marshalRequest(encoder, pkg)
+		data, err := marshalHessianBody(pkg)
 		require.NoError(t, err)
 		assert.NotNil(t, data)
 	})
-
 	t.Run("request with invalid params", func(t *testing.T) {
-		encoder := hessian.NewEncoder()
 		pkg := DubboPackage{
+			Header: DubboHeader{Type: PackageRequest_TwoWay},
 			Service: Service{
 				Path:    "test.Path",
 				Version: "1.0.0",
@@ -426,14 +425,13 @@ func TestMarshalRequest(t *testing.T) {
 			},
 		}
 
-		_, err := marshalRequest(encoder, pkg)
+		_, err := marshalHessianBody(pkg)
 		assert.Error(t, err)
 	})
 }
 
 func TestMarshalResponse(t *testing.T) {
 	t.Run("heartbeat response", func(t *testing.T) {
-		encoder := hessian.NewEncoder()
 		pkg := DubboPackage{
 			Header: DubboHeader{
 				Type:           PackageHeartbeat | PackageResponse,
@@ -444,13 +442,12 @@ func TestMarshalResponse(t *testing.T) {
 			},
 		}
 
-		data, err := marshalResponse(encoder, pkg)
+		data, err := marshalHessianBody(pkg)
 		require.NoError(t, err)
 		assert.NotNil(t, data)
 	})
 
 	t.Run("response with unsupported value", func(t *testing.T) {
-		encoder := hessian.NewEncoder()
 		pkg := DubboPackage{
 			Header: DubboHeader{ResponseStatus: Response_OK},
 			Body: &ResponsePayload{
@@ -459,13 +456,12 @@ func TestMarshalResponse(t *testing.T) {
 			},
 		}
 
-		data, err := marshalResponse(encoder, pkg)
+		data, err := marshalHessianBody(pkg)
 		require.Error(t, err)
 		assert.Nil(t, data)
 	})
 
 	t.Run("response with unsupported attachment", func(t *testing.T) {
-		encoder := hessian.NewEncoder()
 		pkg := DubboPackage{
 			Header: DubboHeader{ResponseStatus: Response_OK},
 			Body: &ResponsePayload{
@@ -476,13 +472,12 @@ func TestMarshalResponse(t *testing.T) {
 			},
 		}
 
-		data, err := marshalResponse(encoder, pkg)
+		data, err := marshalHessianBody(pkg)
 		require.Error(t, err)
 		assert.Nil(t, data)
 	})
 
 	t.Run("response with value", func(t *testing.T) {
-		encoder := hessian.NewEncoder()
 		pkg := DubboPackage{
 			Header: DubboHeader{
 				Type:           PackageResponse,
@@ -494,13 +489,12 @@ func TestMarshalResponse(t *testing.T) {
 			},
 		}
 
-		data, err := marshalResponse(encoder, pkg)
+		data, err := marshalHessianBody(pkg)
 		require.NoError(t, err)
 		assert.NotNil(t, data)
 	})
 
 	t.Run("response with null value", func(t *testing.T) {
-		encoder := hessian.NewEncoder()
 		pkg := DubboPackage{
 			Header: DubboHeader{
 				Type:           PackageResponse,
@@ -512,13 +506,12 @@ func TestMarshalResponse(t *testing.T) {
 			},
 		}
 
-		data, err := marshalResponse(encoder, pkg)
+		data, err := marshalHessianBody(pkg)
 		require.NoError(t, err)
 		assert.NotNil(t, data)
 	})
 
 	t.Run("response with exception", func(t *testing.T) {
-		encoder := hessian.NewEncoder()
 		pkg := DubboPackage{
 			Header: DubboHeader{
 				Type:           PackageResponse,
@@ -530,13 +523,12 @@ func TestMarshalResponse(t *testing.T) {
 			},
 		}
 
-		data, err := marshalResponse(encoder, pkg)
+		data, err := marshalHessianBody(pkg)
 		require.NoError(t, err)
 		assert.NotNil(t, data)
 	})
 
 	t.Run("response with generic exception", func(t *testing.T) {
-		encoder := hessian.NewEncoder()
 		pkg := DubboPackage{
 			Header: DubboHeader{
 				Type:           PackageResponse,
@@ -551,7 +543,7 @@ func TestMarshalResponse(t *testing.T) {
 			},
 		}
 
-		data, err := marshalResponse(encoder, pkg)
+		data, err := marshalHessianBody(pkg)
 		require.NoError(t, err)
 		assert.NotNil(t, data)
 
@@ -575,7 +567,6 @@ func TestMarshalResponse(t *testing.T) {
 	})
 
 	t.Run("response with throwable exception", func(t *testing.T) {
-		encoder := hessian.NewEncoder()
 		pkg := DubboPackage{
 			Header: DubboHeader{
 				Type:           PackageResponse,
@@ -587,13 +578,12 @@ func TestMarshalResponse(t *testing.T) {
 			},
 		}
 
-		data, err := marshalResponse(encoder, pkg)
+		data, err := marshalHessianBody(pkg)
 		require.NoError(t, err)
 		assert.NotNil(t, data)
 	})
 
 	t.Run("response with attachments", func(t *testing.T) {
-		encoder := hessian.NewEncoder()
 		pkg := DubboPackage{
 			Header: DubboHeader{
 				Type:           PackageResponse,
@@ -608,13 +598,12 @@ func TestMarshalResponse(t *testing.T) {
 			},
 		}
 
-		data, err := marshalResponse(encoder, pkg)
+		data, err := marshalHessianBody(pkg)
 		require.NoError(t, err)
 		assert.NotNil(t, data)
 	})
 
 	t.Run("response with error status", func(t *testing.T) {
-		encoder := hessian.NewEncoder()
 		pkg := DubboPackage{
 			Header: DubboHeader{
 				Type:           PackageResponse,
@@ -625,7 +614,7 @@ func TestMarshalResponse(t *testing.T) {
 			},
 		}
 
-		data, err := marshalResponse(encoder, pkg)
+		data, err := marshalHessianBody(pkg)
 		require.NoError(t, err)
 		assert.NotNil(t, data)
 	})
@@ -643,8 +632,8 @@ func TestUnmarshalRequestBody(t *testing.T) {
 		_ = encoder.Encode("hello")                     // args
 		_ = encoder.Encode(map[any]any{"key": "value"}) // attachments
 
-		pkg := &DubboPackage{}
-		err := unmarshalRequestBody(encoder.Buffer(), pkg)
+		pkg := &DubboPackage{Header: DubboHeader{Type: PackageRequest_TwoWay}}
+		err := unmarshalHessianBody(encoder.Buffer(), pkg)
 		require.NoError(t, err)
 		assert.NotNil(t, pkg.Body)
 
@@ -666,8 +655,8 @@ func TestUnmarshalRequestBody(t *testing.T) {
 		_ = encoder.Encode("test")
 		_ = encoder.Encode(map[any]any{"key": "value"})
 
-		pkg := &DubboPackage{}
-		err := unmarshalRequestBody(encoder.Buffer(), pkg)
+		pkg := &DubboPackage{Header: DubboHeader{Type: PackageRequest_TwoWay}}
+		err := unmarshalHessianBody(encoder.Buffer(), pkg)
 		require.NoError(t, err)
 
 		body, ok := pkg.GetBody().(map[string]any)
@@ -685,8 +674,8 @@ func TestUnmarshalRequestBody(t *testing.T) {
 		_ = encoder.Encode("")
 		_ = encoder.Encode(nil)
 
-		pkg := &DubboPackage{}
-		err := unmarshalRequestBody(encoder.Buffer(), pkg)
+		pkg := &DubboPackage{Header: DubboHeader{Type: PackageRequest_TwoWay}}
+		err := unmarshalHessianBody(encoder.Buffer(), pkg)
 		require.NoError(t, err)
 	})
 }
@@ -704,7 +693,7 @@ func TestUnmarshalResponseBody(t *testing.T) {
 				RspObj: &rspObj,
 			},
 		}
-		err := unmarshalResponseBody(encoder.Buffer(), pkg)
+		err := unmarshalHessianBody(encoder.Buffer(), pkg)
 		require.NoError(t, err)
 		assert.Equal(t, "test response", rspObj)
 	})
@@ -721,7 +710,7 @@ func TestUnmarshalResponseBody(t *testing.T) {
 				RspObj: &rspObj,
 			},
 		}
-		err := unmarshalResponseBody(encoder.Buffer(), pkg)
+		err := unmarshalHessianBody(encoder.Buffer(), pkg)
 		require.NoError(t, err)
 
 		response := EnsureResponsePayload(pkg.Body)
@@ -735,7 +724,7 @@ func TestUnmarshalResponseBody(t *testing.T) {
 		_ = encoder.Encode(java_exception.NewThrowable("test error"))
 
 		pkg := &DubboPackage{}
-		err := unmarshalResponseBody(encoder.Buffer(), pkg)
+		err := unmarshalHessianBody(encoder.Buffer(), pkg)
 		require.NoError(t, err)
 
 		response := EnsureResponsePayload(pkg.Body)
@@ -748,7 +737,7 @@ func TestUnmarshalResponseBody(t *testing.T) {
 		_ = encoder.Encode(java_exception.NewDubboGenericException("com.example.UserNotFoundException", "user not found"))
 
 		pkg := &DubboPackage{}
-		err := unmarshalResponseBody(encoder.Buffer(), pkg)
+		err := unmarshalHessianBody(encoder.Buffer(), pkg)
 		require.NoError(t, err)
 
 		response := EnsureResponsePayload(pkg.Body)
@@ -765,7 +754,7 @@ func TestUnmarshalResponseBody(t *testing.T) {
 		_ = encoder.Encode(map[any]any{"key": "value"})
 
 		pkg := &DubboPackage{}
-		err := unmarshalResponseBody(encoder.Buffer(), pkg)
+		err := unmarshalHessianBody(encoder.Buffer(), pkg)
 		require.NoError(t, err)
 
 		response := EnsureResponsePayload(pkg.Body)
@@ -778,7 +767,7 @@ func TestUnmarshalResponseBody(t *testing.T) {
 		_ = encoder.Encode(RESPONSE_NULL_VALUE)
 
 		pkg := &DubboPackage{}
-		err := unmarshalResponseBody(encoder.Buffer(), pkg)
+		err := unmarshalHessianBody(encoder.Buffer(), pkg)
 		require.NoError(t, err)
 	})
 
@@ -788,7 +777,7 @@ func TestUnmarshalResponseBody(t *testing.T) {
 		_ = encoder.Encode(map[any]any{"key": "value"})
 
 		pkg := &DubboPackage{}
-		err := unmarshalResponseBody(encoder.Buffer(), pkg)
+		err := unmarshalHessianBody(encoder.Buffer(), pkg)
 		require.NoError(t, err)
 
 		response := EnsureResponsePayload(pkg.Body)
@@ -801,7 +790,7 @@ func TestUnmarshalResponseBody(t *testing.T) {
 		_ = encoder.Encode("string exception")
 
 		pkg := &DubboPackage{}
-		err := unmarshalResponseBody(encoder.Buffer(), pkg)
+		err := unmarshalHessianBody(encoder.Buffer(), pkg)
 		require.NoError(t, err)
 
 		response := EnsureResponsePayload(pkg.Body)
@@ -814,7 +803,7 @@ func TestUnmarshalResponseBody(t *testing.T) {
 		_ = encoder.Encode("java exception: user not found")
 
 		pkg := &DubboPackage{}
-		err := unmarshalResponseBody(encoder.Buffer(), pkg)
+		err := unmarshalHessianBody(encoder.Buffer(), pkg)
 		require.NoError(t, err)
 
 		response := EnsureResponsePayload(pkg.Body)
@@ -831,7 +820,7 @@ func TestUnmarshalResponseBody(t *testing.T) {
 		_ = encoder.Encode("invalid attachments")
 
 		pkg := &DubboPackage{}
-		err := unmarshalResponseBody(encoder.Buffer(), pkg)
+		err := unmarshalHessianBody(encoder.Buffer(), pkg)
 		assert.Error(t, err)
 	})
 }
@@ -880,9 +869,7 @@ func TestBuildServerSidePackageBody(t *testing.T) {
 
 type TestService struct{}
 
-func TestHessianSerializer_Marshal(t *testing.T) {
-	serializer := HessianSerializer{}
-
+func TestMarshalHessianBody(t *testing.T) {
 	t.Run("marshal request", func(t *testing.T) {
 		pkg := DubboPackage{
 			Header: DubboHeader{
@@ -899,7 +886,7 @@ func TestHessianSerializer_Marshal(t *testing.T) {
 			},
 		}
 
-		data, err := serializer.Marshal(pkg)
+		data, err := marshalHessianBody(pkg)
 		require.NoError(t, err)
 		assert.NotNil(t, data)
 	})
@@ -916,15 +903,13 @@ func TestHessianSerializer_Marshal(t *testing.T) {
 			},
 		}
 
-		data, err := serializer.Marshal(pkg)
+		data, err := marshalHessianBody(pkg)
 		require.NoError(t, err)
 		assert.NotNil(t, data)
 	})
 }
 
-func TestHessianSerializer_Unmarshal(t *testing.T) {
-	serializer := HessianSerializer{}
-
+func TestUnmarshalHessianBody(t *testing.T) {
 	t.Run("unmarshal heartbeat", func(t *testing.T) {
 		pkg := &DubboPackage{
 			Header: DubboHeader{
@@ -932,7 +917,7 @@ func TestHessianSerializer_Unmarshal(t *testing.T) {
 			},
 		}
 
-		err := serializer.Unmarshal([]byte{}, pkg)
+		err := unmarshalHessianBody([]byte{}, pkg)
 		require.NoError(t, err)
 	})
 
@@ -951,7 +936,7 @@ func TestHessianSerializer_Unmarshal(t *testing.T) {
 			},
 		}
 
-		err := serializer.Unmarshal(encoder.Buffer(), pkg)
+		err := unmarshalHessianBody(encoder.Buffer(), pkg)
 		require.NoError(t, err)
 	})
 
@@ -970,7 +955,7 @@ func TestHessianSerializer_Unmarshal(t *testing.T) {
 			},
 		}
 
-		err := serializer.Unmarshal(encoder.Buffer(), pkg)
+		err := unmarshalHessianBody(encoder.Buffer(), pkg)
 		require.NoError(t, err)
 		assert.Equal(t, "test", rspObj)
 	})

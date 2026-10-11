@@ -33,6 +33,9 @@ import (
 )
 
 import (
+	"dubbo.apache.org/dubbo-go/v3/common/serialize"
+	"dubbo.apache.org/dubbo-go/v3/common/serialize/hessian2"
+	"dubbo.apache.org/dubbo-go/v3/common/serialize/msgpack"
 	"dubbo.apache.org/dubbo-go/v3/protocol/triple/triple_protocol/internal/assert"
 	"dubbo.apache.org/dubbo-go/v3/protocol/triple/triple_protocol/internal/interoperability"
 )
@@ -59,28 +62,28 @@ func init() {
 func TestProtoWrapperCodec_Name(t *testing.T) {
 	t.Parallel()
 
-	codec := newProtoWrapperCodec(&hessian2Codec{})
+	codec := newProtoWrapperCodec(hessian2.Serialization{})
 	assert.Equal(t, codec.Name(), codecNameHessian2)
 }
 
 func TestProtoWrapperCodec_WireCodecName(t *testing.T) {
 	t.Parallel()
 
-	codec := newProtoWrapperCodec(&hessian2Codec{})
+	codec := newProtoWrapperCodec(hessian2.Serialization{})
 	assert.Equal(t, codec.WireCodecName(), codecNameProto)
 }
 
 func TestProtoWrapperCodec_ImplementsWrapperCodec(t *testing.T) {
 	t.Parallel()
 
-	codec := newProtoWrapperCodec(&hessian2Codec{})
+	codec := newProtoWrapperCodec(hessian2.Serialization{})
 	var _ WrapperCodec = codec // Compile-time check
 }
 
 func TestProtoWrapperCodec_MarshalRequest_SingleArg(t *testing.T) {
 	t.Parallel()
 
-	codec := newProtoWrapperCodec(&hessian2Codec{})
+	codec := newProtoWrapperCodec(hessian2.Serialization{})
 
 	// Marshal a single string argument
 	data, err := codec.Marshal([]any{"hello"})
@@ -100,7 +103,7 @@ func TestProtoWrapperCodec_MarshalRequest_SingleArg(t *testing.T) {
 func TestProtoWrapperCodec_MarshalRequest_MultipleArgs(t *testing.T) {
 	t.Parallel()
 
-	codec := newProtoWrapperCodec(&hessian2Codec{})
+	codec := newProtoWrapperCodec(hessian2.Serialization{})
 
 	// Marshal multiple arguments
 	data, err := codec.Marshal([]any{"hello", int32(42), true})
@@ -118,7 +121,7 @@ func TestProtoWrapperCodec_MarshalRequest_MultipleArgs(t *testing.T) {
 func TestProtoWrapperCodec_MarshalRequest_POJO(t *testing.T) {
 	t.Parallel()
 
-	codec := newProtoWrapperCodec(&hessian2Codec{})
+	codec := newProtoWrapperCodec(hessian2.Serialization{})
 
 	user := &TestUser{ID: "001", Name: "test", Age: 25}
 	data, err := codec.Marshal([]any{user})
@@ -134,10 +137,10 @@ func TestProtoWrapperCodec_MarshalRequest_POJO(t *testing.T) {
 func TestProtoWrapperCodec_UnmarshalRequest(t *testing.T) {
 	t.Parallel()
 
-	codec := newProtoWrapperCodec(&hessian2Codec{})
+	codec := newProtoWrapperCodec(hessian2.Serialization{})
 
 	// Create a TripleRequestWrapper
-	hessianCodec := &hessian2Codec{}
+	hessianCodec := hessian2.Serialization{}
 	arg1, _ := hessianCodec.Marshal("hello")
 	arg2, _ := hessianCodec.Marshal(int32(42))
 
@@ -167,10 +170,10 @@ func TestProtoWrapperCodec_UnmarshalRequest(t *testing.T) {
 func TestProtoWrapperCodec_UnmarshalResponse(t *testing.T) {
 	t.Parallel()
 
-	codec := newProtoWrapperCodec(&hessian2Codec{})
+	codec := newProtoWrapperCodec(hessian2.Serialization{})
 
 	// Create a TripleResponseWrapper
-	hessianCodec := &hessian2Codec{}
+	hessianCodec := hessian2.Serialization{}
 	respData, _ := hessianCodec.Marshal(map[string]any{
 		"id":   "001",
 		"name": "test",
@@ -199,7 +202,7 @@ func TestProtoWrapperCodec_UnmarshalResponse(t *testing.T) {
 func TestProtoWrapperCodec_RoundTrip_Request(t *testing.T) {
 	t.Parallel()
 
-	codec := newProtoWrapperCodec(&hessian2Codec{})
+	codec := newProtoWrapperCodec(hessian2.Serialization{})
 
 	// Marshal
 	original := []any{"hello", int32(42)}
@@ -217,7 +220,7 @@ func TestProtoWrapperCodec_RoundTrip_Request(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Now unmarshal the actual data
-	hessianCodec := &hessian2Codec{}
+	hessianCodec := hessian2.Serialization{}
 	err = hessianCodec.Unmarshal(wrapper.Args[0], &str)
 	assert.Nil(t, err)
 	err = hessianCodec.Unmarshal(wrapper.Args[1], &num)
@@ -248,10 +251,10 @@ func TestProtoWrapperCodec_UnmarshalWrappedResponse(t *testing.T) {
 	t.Parallel()
 
 	// Client-side: protoWrapperCodec decodes a TripleResponseWrapper.
-	codec := newProtoWrapperCodec(&hessian2Codec{})
+	codec := newProtoWrapperCodec(hessian2.Serialization{})
 
 	// Create a TripleResponseWrapper
-	hessianCodec := &hessian2Codec{}
+	hessianCodec := hessian2.Serialization{}
 	respData, _ := hessianCodec.Marshal("hello world")
 
 	wrapper := &interoperability.TripleResponseWrapper{
@@ -276,7 +279,7 @@ func TestServerCodecSession_UnmarshalWrappedRequest(t *testing.T) {
 	codecSession := &tripleServerCodecSession{delegate: &protoBinaryCodec{}}
 
 	// Create a TripleRequestWrapper
-	hessianCodec := &hessian2Codec{}
+	hessianCodec := hessian2.Serialization{}
 	arg1, _ := hessianCodec.Marshal("arg1")
 	arg2, _ := hessianCodec.Marshal(int64(123))
 
@@ -311,7 +314,7 @@ func TestServerCodecSession_UnmarshalSingleArgRequest(t *testing.T) {
 
 	// Test that it tries TripleResponseWrapper first, then falls back to TripleRequestWrapper
 	// Create a valid TripleRequestWrapper
-	hessianCodec := &hessian2Codec{}
+	hessianCodec := hessian2.Serialization{}
 	arg1, _ := hessianCodec.Marshal("test")
 
 	wrapper := &interoperability.TripleRequestWrapper{
@@ -338,7 +341,7 @@ func TestServerCodecSession_UnmarshalSingleArgRequest(t *testing.T) {
 func TestGetWireCodecName_WrapperCodec(t *testing.T) {
 	t.Parallel()
 
-	codec := newProtoWrapperCodec(&hessian2Codec{})
+	codec := newProtoWrapperCodec(hessian2.Serialization{})
 	wireCodecName := getWireCodecName(codec)
 	assert.Equal(t, wireCodecName, codecNameProto)
 }
@@ -354,26 +357,26 @@ func TestGetWireCodecName_RegularCodec(t *testing.T) {
 func TestGetWireCodecName_Hessian2Codec(t *testing.T) {
 	t.Parallel()
 
-	codec := &hessian2Codec{}
+	codec := hessian2.Serialization{}
 	wireCodecName := getWireCodecName(codec)
 	assert.Equal(t, wireCodecName, codecNameHessian2)
 }
 
 // =============================================================================
-// hessian2Codec Tests
+// hessian2 Serialization Tests
 // =============================================================================
 
 func TestHessian2Codec_Name(t *testing.T) {
 	t.Parallel()
 
-	codec := &hessian2Codec{}
+	codec := hessian2.Serialization{}
 	assert.Equal(t, codec.Name(), codecNameHessian2)
 }
 
 func TestHessian2Codec_RoundTrip_String(t *testing.T) {
 	t.Parallel()
 
-	codec := &hessian2Codec{}
+	codec := hessian2.Serialization{}
 
 	original := "hello world"
 	data, err := codec.Marshal(original)
@@ -388,7 +391,7 @@ func TestHessian2Codec_RoundTrip_String(t *testing.T) {
 func TestHessian2Codec_RoundTrip_Int(t *testing.T) {
 	t.Parallel()
 
-	codec := &hessian2Codec{}
+	codec := hessian2.Serialization{}
 
 	original := int32(12345)
 	data, err := codec.Marshal(original)
@@ -403,7 +406,7 @@ func TestHessian2Codec_RoundTrip_Int(t *testing.T) {
 func TestHessian2Codec_RoundTrip_Map(t *testing.T) {
 	t.Parallel()
 
-	codec := &hessian2Codec{}
+	codec := hessian2.Serialization{}
 
 	original := map[string]any{"key1": "value1", "key2": int64(42)}
 	data, err := codec.Marshal(original)
@@ -422,7 +425,7 @@ func TestHessian2Codec_RoundTrip_Map(t *testing.T) {
 func TestHessian2Codec_RoundTrip_Slice(t *testing.T) {
 	t.Parallel()
 
-	codec := &hessian2Codec{}
+	codec := hessian2.Serialization{}
 
 	original := []string{"a", "b", "c"}
 	data, err := codec.Marshal(original)
@@ -437,7 +440,7 @@ func TestHessian2Codec_RoundTrip_Slice(t *testing.T) {
 func TestHessian2Codec_RoundTrip_POJO(t *testing.T) {
 	t.Parallel()
 
-	codec := &hessian2Codec{}
+	codec := hessian2.Serialization{}
 
 	original := &TestUser{ID: "001", Name: "test", Age: 25}
 	data, err := codec.Marshal(original)
@@ -557,10 +560,10 @@ func TestGetArgType_POJO(t *testing.T) {
 func TestProtoWrapperCodec_UnmarshalRequest_ArgCountMismatch(t *testing.T) {
 	t.Parallel()
 
-	codec := newProtoWrapperCodec(&hessian2Codec{})
+	codec := newProtoWrapperCodec(hessian2.Serialization{})
 
 	// Create a wrapper with 2 args
-	hessianCodec := &hessian2Codec{}
+	hessianCodec := hessian2.Serialization{}
 	arg1, _ := hessianCodec.Marshal("hello")
 	arg2, _ := hessianCodec.Marshal(int32(42))
 
@@ -593,7 +596,7 @@ func TestProtoBinaryCodec_Unmarshal_InvalidData(t *testing.T) {
 func TestProtoWrapperCodec_Marshal_EmptyArgs(t *testing.T) {
 	t.Parallel()
 
-	codec := newProtoWrapperCodec(&hessian2Codec{})
+	codec := newProtoWrapperCodec(hessian2.Serialization{})
 
 	// Marshal empty args (for no-arg methods)
 	data, err := codec.Marshal([]any{})
@@ -608,7 +611,7 @@ func TestProtoWrapperCodec_Marshal_EmptyArgs(t *testing.T) {
 func TestProtoWrapperCodec_Unmarshal_EmptyRequest(t *testing.T) {
 	t.Parallel()
 
-	codec := newProtoWrapperCodec(&hessian2Codec{})
+	codec := newProtoWrapperCodec(hessian2.Serialization{})
 
 	// Create an empty request wrapper
 	wrapper := &interoperability.TripleRequestWrapper{
@@ -630,7 +633,7 @@ func TestProtoWrapperCodec_Unmarshal_EmptyRequest(t *testing.T) {
 func TestProtoWrapperCodec_Msgpack(t *testing.T) {
 	t.Parallel()
 
-	codec := newProtoWrapperCodec(&msgpackCodec{})
+	codec := newProtoWrapperCodec(msgpack.Serialization{})
 	assert.Equal(t, codec.Name(), codecNameMsgPack)
 	assert.Equal(t, codec.WireCodecName(), codecNameProto)
 }
@@ -644,7 +647,7 @@ func TestServerCodecSession_UnmarshalWrappedRequest_MsgPack(t *testing.T) {
 		allowedSerializeType: codecNameMsgPack,
 	}
 
-	msgpCodec := &msgpackCodec{}
+	msgpCodec := msgpack.Serialization{}
 	arg1, _ := msgpCodec.Marshal("msgarg")
 	arg2, _ := msgpCodec.Marshal(int64(7))
 
@@ -725,7 +728,7 @@ func TestServerCodecSession_UnmarshalWrappedRequest_CorruptPayload(t *testing.T)
 func TestProtoWrapperCodec_UnmarshalWrappedResponse_UnknownType(t *testing.T) {
 	t.Parallel()
 
-	codec := newProtoWrapperCodec(&hessian2Codec{})
+	codec := newProtoWrapperCodec(hessian2.Serialization{})
 	wrapper := &interoperability.TripleResponseWrapper{
 		SerializeType: "unknown",
 		Data:          []byte{0x01},
@@ -749,7 +752,7 @@ func TestServerCodecSession_MarshalWrappedResponse_Hessian2(t *testing.T) {
 	assert.Nil(t, proto.Unmarshal(data, &wrapper))
 	assert.Equal(t, wrapper.SerializeType, codecNameHessian2)
 
-	hessianCodec := &hessian2Codec{}
+	hessianCodec := hessian2.Serialization{}
 	var out any
 	assert.Nil(t, hessianCodec.Unmarshal(wrapper.Data, &out))
 	assert.Equal(t, out, "hello")
@@ -766,7 +769,7 @@ func TestServerCodecSession_MarshalWrappedResponse_FollowsSerializeType(t *testi
 	assert.Nil(t, proto.Unmarshal(data, &wrapper))
 	assert.Equal(t, wrapper.SerializeType, codecNameMsgPack)
 
-	msgp := &msgpackCodec{}
+	msgp := msgpack.Serialization{}
 	var out int64
 	assert.Nil(t, msgp.Unmarshal(wrapper.Data, &out))
 	assert.Equal(t, out, int64(42))
@@ -781,7 +784,7 @@ func TestNonIDLResponse_RoundTrip_Hessian2(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Client decode (via protoWrapperCodec, simulating a Non-IDL client).
-	codec := newProtoWrapperCodec(&hessian2Codec{})
+	codec := newProtoWrapperCodec(hessian2.Serialization{})
 	var out any
 	assert.Nil(t, codec.Unmarshal(data, &out))
 	assert.Equal(t, out, "roundtrip-hessian")
@@ -794,7 +797,7 @@ func TestNonIDLResponse_RoundTrip_MsgPack(t *testing.T) {
 	data, err := session.Marshal("roundtrip-msgpack")
 	assert.Nil(t, err)
 
-	codec := newProtoWrapperCodec(&msgpackCodec{})
+	codec := newProtoWrapperCodec(msgpack.Serialization{})
 	var out string
 	assert.Nil(t, codec.Unmarshal(data, &out))
 	assert.Equal(t, out, "roundtrip-msgpack")
@@ -816,7 +819,7 @@ func TestServerCodecSession_Allowlist_RejectsUnauthorizedSerializeType(t *testin
 				delegate:             &protoBinaryCodec{},
 				allowedSerializeType: tc.allowed,
 			}
-			msgpCodec := &msgpackCodec{}
+			msgpCodec := msgpack.Serialization{}
 			arg, _ := msgpCodec.Marshal("sneaky")
 			wrapper := &interoperability.TripleRequestWrapper{
 				SerializeType: codecNameMsgPack,
@@ -842,7 +845,7 @@ func TestServerCodecSession_Allowlist_Hessian2AlwaysAllowed(t *testing.T) {
 		delegate:             &protoBinaryCodec{},
 		allowedSerializeType: "protobuf",
 	}
-	hessianCodec := &hessian2Codec{}
+	hessianCodec := hessian2.Serialization{}
 	arg, _ := hessianCodec.Marshal("ok")
 	wrapper := &interoperability.TripleRequestWrapper{
 		SerializeType: codecNameHessian2,
@@ -959,7 +962,7 @@ func TestServerCodecSession_Marshal_VoidResponse(t *testing.T) {
 			assert.Equal(t, len(wrapper.Data), 0)
 
 			// Client decodes empty Data as void (no error, no value).
-			clientCodec := newProtoWrapperCodec(&hessian2Codec{})
+			clientCodec := newProtoWrapperCodec(hessian2.Serialization{})
 			var got any
 			assert.Nil(t, clientCodec.Unmarshal(data, &got))
 		})
@@ -990,7 +993,7 @@ func TestProtoWrapperCodec_Unmarshal_EmptyData_UnknownSerializeType(t *testing.T
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			codec := newProtoWrapperCodec(&hessian2Codec{})
+			codec := newProtoWrapperCodec(hessian2.Serialization{})
 			wrapper := &interoperability.TripleResponseWrapper{
 				SerializeType: tc.serializeType,
 				// Data intentionally nil/empty.
@@ -1111,14 +1114,14 @@ func TestNonIDLUnary_PublicEntry_MarshalAppendEffective(t *testing.T) {
 	// needs an explicit fallback to reach the wrapper decoder.
 	for _, tc := range []struct {
 		name       string
-		inner      Codec
+		inner      serialize.Serialization
 		handlerOpt HandlerOption
 		clientOpts []ClientOption
 	}{
-		{"triple-hessian2", &hessian2Codec{}, nil, []ClientOption{WithTriple()}},
-		{"triple-msgpack", &msgpackCodec{}, WithExpectedCodecName(codecNameMsgPack), []ClientOption{WithTriple()}},
-		{"grpc-hessian2", &hessian2Codec{}, WithExpectedCodecName(codecNameHessian2), nil},
-		{"grpc-msgpack", &msgpackCodec{}, WithExpectedCodecName(codecNameMsgPack), nil},
+		{"triple-hessian2", hessian2.Serialization{}, nil, []ClientOption{WithTriple()}},
+		{"triple-msgpack", msgpack.Serialization{}, WithExpectedCodecName(codecNameMsgPack), []ClientOption{WithTriple()}},
+		{"grpc-hessian2", hessian2.Serialization{}, WithExpectedCodecName(codecNameHessian2), nil},
+		{"grpc-msgpack", msgpack.Serialization{}, WithExpectedCodecName(codecNameMsgPack), nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

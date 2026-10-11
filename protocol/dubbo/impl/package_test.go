@@ -425,16 +425,3 @@ func TestDubboPackageString(t *testing.T) {
 	assert.Contains(t, result, "HessianPackage")
 	assert.Contains(t, result, "test.service")
 }
-
-// TestDubboPackageSetSerializer tests SetSerializer method
-func TestDubboPackageSetSerializer(t *testing.T) {
-	pkg := NewDubboPackage(nil)
-	serializer := &HessianSerializer{}
-
-	// Should not panic
-	assert.NotPanics(t, func() {
-		pkg.SetSerializer(serializer)
-	})
-
-	assert.NotNil(t, pkg.Codec)
-}

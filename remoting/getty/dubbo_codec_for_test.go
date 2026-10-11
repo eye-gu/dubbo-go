@@ -35,6 +35,7 @@ import (
 
 import (
 	"dubbo.apache.org/dubbo-go/v3/common/constant"
+	"dubbo.apache.org/dubbo-go/v3/common/serialize"
 	"dubbo.apache.org/dubbo-go/v3/protocol/dubbo/impl"
 	"dubbo.apache.org/dubbo-go/v3/protocol/invocation"
 	"dubbo.apache.org/dubbo-go/v3/protocol/result"
@@ -75,11 +76,16 @@ func (c *DubboTestCodec) EncodeRequest(request *remoting.Request) (*bytes.Buffer
 
 	header := impl.DubboHeader{}
 	serialization := tmpInvocation.GetAttachmentWithDefaultValue(constant.SerializationKey, constant.Hessian2Serialization)
-	if serialization == constant.ProtobufSerialization {
-		header.SerialID = constant.SProto
-	} else {
-		header.SerialID = constant.SHessian2
+	s, err := serialize.GetSerialization(serialization)
+	if err != nil {
+		// it will be wrapped in readwrite.Write .
+		return nil, perrors.WithStack(err)
 	}
+	dubboSerialization, ok := s.(serialize.DubboSerialization)
+	if !ok {
+		return nil, fmt.Errorf("serialization %s does not support dubbo protocol", serialization)
+	}
+	header.SerialID = dubboSerialization.ContentTypeID()
 	header.ID = request.ID
 	if request.TwoWay {
 		header.Type = impl.PackageRequest_TwoWay

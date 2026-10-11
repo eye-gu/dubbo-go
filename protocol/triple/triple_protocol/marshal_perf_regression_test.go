@@ -31,6 +31,9 @@ import (
 )
 
 import (
+	"dubbo.apache.org/dubbo-go/v3/common/serialize"
+	"dubbo.apache.org/dubbo-go/v3/common/serialize/hessian2"
+	"dubbo.apache.org/dubbo-go/v3/common/serialize/msgpack"
 	pingv1 "dubbo.apache.org/dubbo-go/v3/protocol/triple/triple_protocol/internal/gen/proto/connect/ping/v1"
 )
 
@@ -739,7 +742,7 @@ func TestMarshalPerfTypeGuard(t *testing.T) {
 	// protoWrapperCodec carries the client non-IDL request path (Java interop
 	// and generic calls); without the extension all of that traffic stays on
 	// the allocating codec.Marshal path, whatever the inner serialization is.
-	for _, inner := range []Codec{&hessian2Codec{}, &msgpackCodec{}} {
+	for _, inner := range []serialize.Serialization{hessian2.Serialization{}, msgpack.Serialization{}} {
 		if !implements(newProtoWrapperCodec(inner)) {
 			t.Fatalf("protoWrapperCodec(inner %s) must implement marshalAppender (client request fast path)", inner.Name())
 		}
@@ -752,9 +755,7 @@ func TestMarshalPerfTypeGuard(t *testing.T) {
 		{name: "noAppender wrapper", codec: &noAppenderCodec{&protoBinaryCodec{}}},
 		// The slow-path control used by the wire parity tests: wrapping the
 		// wrapper in a plain Codec must keep hiding the extension.
-		{name: "wrapper hidden behind Codec", codec: &noAppenderCodec{newProtoWrapperCodec(&hessian2Codec{})}},
-		{name: "hessian2", codec: &hessian2Codec{}},
-		{name: "msgpack", codec: &msgpackCodec{}},
+		{name: "wrapper hidden behind Codec", codec: &noAppenderCodec{newProtoWrapperCodec(hessian2.Serialization{})}},
 		{name: "json", codec: &protoJSONCodec{name: codecNameJSON}},
 	}
 	for _, tc := range never {
@@ -959,7 +960,7 @@ type wrapperFastPathProbe struct {
 var _ Codec = (*wrapperFastPathProbe)(nil)
 var _ marshalAppender = (*wrapperFastPathProbe)(nil)
 
-func newWrapperFastPathProbe(inner Codec) *wrapperFastPathProbe {
+func newWrapperFastPathProbe(inner serialize.Serialization) *wrapperFastPathProbe {
 	return &wrapperFastPathProbe{protoWrapperCodec: newProtoWrapperCodec(inner)}
 }
 
@@ -983,7 +984,7 @@ func TestMarshalPerfClientWrapperFastPath(t *testing.T) {
 		// wrapperFastPathProbe.Marshal always fails, so only the MarshalAppend
 		// branch can produce a successful marshal here.
 		msg := []any{"fast-path", int32(42)}
-		for _, inner := range []Codec{&hessian2Codec{}, &msgpackCodec{}} {
+		for _, inner := range []serialize.Serialization{hessian2.Serialization{}, msgpack.Serialization{}} {
 			for _, compress := range []bool{false, true} {
 				tripleProbe := newWrapperFastPathProbe(inner)
 				tripleM, tripleOut, _ := newTripleMarshalerForTest(t, tripleProbe, compress, 0, 0)
@@ -1058,7 +1059,7 @@ func TestMarshalPerfClientWrapperFastPath(t *testing.T) {
 		)
 
 		for _, compress := range []bool{false, true} {
-			for _, inner := range []Codec{&hessian2Codec{}, &msgpackCodec{}} {
+			for _, inner := range []serialize.Serialization{hessian2.Serialization{}, msgpack.Serialization{}} {
 				for _, mc := range inputs {
 					t.Run(fmt.Sprintf("compress=%v/%s/%s", compress, inner.Name(), mc.name), func(t *testing.T) {
 						t.Parallel()
@@ -1119,7 +1120,7 @@ func assertSameOutcome(t *testing.T, wire string, fastErr, slowErr *Error, fastW
 func TestMarshalPerfClientWrapperConcurrentSend(t *testing.T) {
 	const goroutines = 32
 	const iters = 100
-	for _, inner := range []Codec{&hessian2Codec{}, &msgpackCodec{}} {
+	for _, inner := range []serialize.Serialization{hessian2.Serialization{}, msgpack.Serialization{}} {
 		t.Run(inner.Name(), func(t *testing.T) {
 			codec := newProtoWrapperCodec(inner)
 			sharedPool := newBufferPool()
@@ -1209,7 +1210,7 @@ func verifyWrapperEnvelopeFrames(wire []byte, codec Codec, iters, g int) error {
 func TestMarshalPerfClientWrapperLargeBufferDropped(t *testing.T) {
 	t.Parallel()
 
-	for _, inner := range []Codec{&hessian2Codec{}, &msgpackCodec{}} {
+	for _, inner := range []serialize.Serialization{hessian2.Serialization{}, msgpack.Serialization{}} {
 		t.Run(inner.Name(), func(t *testing.T) {
 			codec := newProtoWrapperCodec(inner)
 			large := []any{strings.Repeat("a", 8*1024*1024+1)}
